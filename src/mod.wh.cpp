@@ -10413,7 +10413,7 @@ class Renderer {
             const std::wstring positionText =
                 formatCompactTime(elapsedSeconds) + L"/" + formatCompactTime(totalSeconds);
             const D2D1_RECT_F positionRect = D2D1::RectF(
-                artRect.right + 5.0f, cy - 13.0f, waveRect.left - 3.0f, cy + 13.0f);
+                artRect.right + 2.0f, cy - 13.0f, waveRect.left - 1.0f, cy + 13.0f);
             if (smallTextFormat_ && positionRect.right > positionRect.left) {
                 smallTextFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                 smallTextFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -11689,7 +11689,7 @@ Activity ActivityForKind(IslandKind kind, const Settings& settings, const Shared
             break;
         case IslandKind::Media:
             // Room for artwork, elapsed/total time and the waveform.
-            activity.width = 218.0f;
+            activity.width = 198.0f;
             activity.height = 44.0f;
             break;
         case IslandKind::Progress:
@@ -12774,6 +12774,8 @@ DWORD WINAPI RenderThreadProc(void*) {
     double nextBatteryPoll = 0.0;
     double nextProgressPoll = 0.0;
     double nextSystemPoll = 0.0;
+    double fpsWindowStarted = NowSeconds();
+    unsigned int fpsWindowFrames = 0;
     double nextPrivacyPoll = 0.0;
     double nextGameCheck = 0.0;
     bool wasManuallyHidden = false;
@@ -13289,9 +13291,25 @@ DWORD WINAPI RenderThreadProc(void*) {
 
         nudgeSpring.Step(dt * speed, 280.0f * styleStiffnessMult, 24.0f * styleDampingMult);
 
-        {
-            std::lock_guard lock(g_stateMutex);
-            g_state.system.renderFps = ClampInt(static_cast<int>(1.0f / std::max(dt, 0.001f) + 0.5f), 0, 1000);
+        // Sample Game Overlay FPS at most once per second instead of
+        // replacing the displayed number on every animation frame.
+        // The render loop itself retains its configured refresh rate.
+        if (IsGameOverlayActive(g_settings)) {
+            ++fpsWindowFrames;
+            const double elapsed = now - fpsWindowStarted;
+            if (elapsed >= 1.0) {
+                const int measured = ClampInt(static_cast<int>(
+                    static_cast<double>(fpsWindowFrames) / elapsed + 0.5), 0, 1000);
+                {
+                    std::lock_guard lock(g_stateMutex);
+                    g_state.system.renderFps = measured;
+                }
+                fpsWindowFrames = 0;
+                fpsWindowStarted = now;
+            }
+        } else {
+            fpsWindowFrames = 0;
+            fpsWindowStarted = now;
         }
 
         const bool draggingOrHover = hover || ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 && PtInRect(&windowRect, cursor));

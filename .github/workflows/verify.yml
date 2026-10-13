@@ -33,6 +33,18 @@ jobs:
           node integrations/browser-media/extension/test_background_art.cjs
           node integrations/browser-media/extension/test_page_art.cjs
           python integrations/browser-media/windhawk/test_native_host.py
+      - name: Install preview renderer
+        run: python -m pip install Pillow==12.3.0
+      - name: Render all synthetic dashboard previews
+        run: python scripts/render_previews.py
+      - name: Validate preview coverage and FPS cadence
+        run: python tests/test_previews.py
+      - name: Upload synthetic preview gallery
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-island-previews
+          path: previews/*.png
+          retention-days: 30
       - name: Verify generated bundle
         shell: pwsh
         run: |

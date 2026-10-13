@@ -2,6 +2,73 @@
 
 Улучшенная сборка Dynamic Island for Windows с интеграциями браузерного медиаплеера и Discord. Исходник мода поддерживается отдельно от вспомогательных инструментов.
 
+## 📸 See it in Action
+
+<sub>Демонстрационные рендеры на синтетических данных: визуальная документация,
+не скриншоты работающего процесса Windhawk. Генерируются через GitHub Actions.</sub>
+
+<p align="center">
+  <img src="previews/desktop.png" alt="Dynamic Island Enhanced — desktop illustration" width="900" />
+</p>
+
+<p align="center">
+  <img src="previews/Full-preview-v2.png" alt="Overview of Enhanced island surfaces" width="760" />
+</p>
+
+### Dashboards
+
+| Media Player | Calendar | Weather | Game Overlay | Idle View |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="previews/media-v2.png" width="200" alt="Media" /> | <img src="previews/calendar.png" width="200" alt="Calendar" /> | <img src="previews/weather-v2.png" width="200" alt="Weather" /> | <img src="previews/gamebar-v2.png" width="200" alt="Game overlay" /> | <img src="previews/idle-v2.png" width="200" alt="Idle" /> |
+
+### Hardware Monitor
+
+<p align="center">
+  <img src="previews/hardware-monitor.png" alt="Hardware Monitor" width="420" />
+</p>
+
+### Themes
+
+<p align="center">
+  <img src="previews/themes.png" alt="Themes" width="760" />
+</p>
+
+### Privacy Indicators
+
+| Camera Detected | Microphone Detected |
+| :---: | :---: |
+| <img src="previews/camera-detected-v2.png" width="200" alt="Camera active" /> | <img src="previews/mic-detected-v2.png" width="200" alt="Microphone active" /> |
+
+### Enhanced — Media & Discord
+
+| Compact Media | Discord Voice | Discord Connected | Discord Notification |
+| :---: | :---: | :---: | :---: |
+| <img src="previews/compact-media.png" width="220" alt="Collapsed media player" /> | <img src="previews/discord-voice-compact.png" width="220" alt="Collapsed Discord voice" /> | <img src="previews/discord-voice.png" width="220" alt="Discord dashboard" /> | <img src="previews/discord-notification.png" width="220" alt="Discord incoming message" /> |
+
+### System Events
+
+| Notification | Volume | Brightness | Clipboard |
+| :---: | :---: | :---: | :---: |
+| <img src="previews/notification.png" width="220" /> | <img src="previews/volume.png" width="220" /> | <img src="previews/brightness.png" width="220" /> | <img src="previews/clipboard.png" width="220" /> |
+
+| Caps Lock | Num Lock | USB / Device | Bluetooth |
+| :---: | :---: | :---: | :---: |
+| <img src="previews/caps-lock.png" width="220" /> | <img src="previews/num-lock.png" width="220" /> | <img src="previews/device.png" width="220" /> | <img src="previews/bluetooth.png" width="220" /> |
+
+| Timer | Battery | Progress | Do Not Disturb |
+| :---: | :---: | :---: | :---: |
+| <img src="previews/timer.png" width="220" /> | <img src="previews/battery-low.png" width="220" /> | <img src="previews/progress.png" width="220" /> | <img src="previews/dnd.png" width="220" /> |
+
+| File Tray | Focus Timer | Lyrics | Discord Login |
+| :---: | :---: | :---: | :---: |
+| <img src="previews/file-tray.png" width="220" /> | <img src="previews/focus-timer.png" width="220" /> | <img src="previews/lyrics.png" width="220" /> | <img src="previews/discord-signed-out.png" width="220" /> |
+
+Весь набор сценариев (32 PNG) хранится в [previews/](previews/). Изображения
+генерирует [scripts/render_previews.py](scripts/render_previews.py) без сети и
+без чтения пользовательских данных.
+
+---
+
 ## Репозитории и структура
 
 | Компонент                          | Git-репозиторий                                                                                          |
@@ -150,3 +217,36 @@ clang++ -std=c++17 tests/test_game_detection.cpp -o test_game_detection.exe -lad
 python scripts/test_features.py
 python scripts/build.py
 ~~~
+
+
+## Synthetic preview pipeline
+
+README previews follow the upstream project's visual section order:
+See it in Action, Dashboards, Hardware Monitor, Themes, Privacy Indicators,
+followed by Enhanced features and system events.
+
+All 14 IslandKind values have mapped synthetic scenarios. The 32 PNG files
+are generated offline from deterministic synthetic state by
+scripts/render_previews.py using Pillow 12.3.0 and native Windows Segoe UI.
+They are illustrative renders; they are not screenshots of an actual Windhawk
+process and do not read tokens, Discord messages, system sensors, or browser data.
+
+Run locally:
+
+~~~powershell
+python -m pip install Pillow==12.3.0
+python scripts/render_previews.py
+python tests/test_previews.py
+~~~
+
+GitHub Actions:
+- verify.yml renders and validates all previews, then publishes them as a
+  downloadable workflow artifact.
+- render-previews.yml runs when UI source or the renderer changes and on manual
+  workflow_dispatch. It renders and uploads the gallery, then updates committed
+  previews on main only when the PNGs changed.
+- Tests verify coverage of every IslandKind and every linked README image.
+
+In the Game Overlay, FPS is sampled into one displayed value no more than once
+per second, while the island's normal animation frame pacing stays unchanged.
+The displayed counter describes the overlay's own measured frame pacing.

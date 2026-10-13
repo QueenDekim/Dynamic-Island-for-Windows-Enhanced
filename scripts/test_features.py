@@ -15,7 +15,7 @@ def check(value: bool, description: str) -> None:
 
 check("formatCompactTime(elapsedSeconds) + L\"/\" + formatCompactTime(totalSeconds)"
       in source, "compact media uses elapsed/total timeline")
-check("activity.width = 218.0f;" in source,
+check("activity.width = 198.0f;" in source,
       "compact media reserves room for timeline")
 check("g_discordProcessRunning.load" in source and
       "if (!settings.discord || !g_discordProcessRunning.load" in source,
