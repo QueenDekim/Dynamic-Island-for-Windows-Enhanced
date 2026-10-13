@@ -13,8 +13,18 @@ $clang = Get-ChildItem -Path $folder -Recurse -Filter clang++.exe -File |
 if (!$clang) { throw "Windhawk Clang executable missing" }
 $binFolder = Split-Path -Parent $clang.FullName
 $toolchainRoot = Split-Path -Parent $binFolder
-if (!(Test-Path (Join-Path $toolchainRoot "include\winrt\Windows.Foundation.h"))) {
-    throw "WinRT headers missing from compiler"
+# Windhawk ships the C++/WinRT projection separately from clang.
+# Include the official merged headers used by Windhawk 1.6.
+$winrtArchive = Join-Path $env:RUNNER_TEMP "windhawk-winrt.7z"
+$winrtUrl = "https://github.com/ramensoftware/windhawk-dependencies/releases/download/v1.6/winrt_winui2_2.8.7_winui3_1.7.250401001.7z"
+Invoke-WebRequest -Uri $winrtUrl -OutFile $winrtArchive
+$winrtDir = Join-Path $toolchainRoot "include\winrt"
+New-Item -ItemType Directory -Force -Path $winrtDir | Out-Null
+& $sevenZip x $winrtArchive "-o$winrtDir" -y
+if ($LASTEXITCODE -ne 0) { throw "WinRT header extraction failed" }
+if (!(Test-Path (Join-Path $winrtDir "Windows.Foundation.h")) -or
+    !(Test-Path (Join-Path $winrtDir "Windows.Media.Control.h"))) {
+    throw "C++/WinRT system projection headers missing"
 }
 Add-Content -LiteralPath $env:GITHUB_ENV -Value "WINDHAWK_COMPILER_ROOT=$toolchainRoot"
 Write-Host "Windhawk Clang toolchain ready: $toolchainRoot"
