@@ -1,0 +1,17 @@
+# Built, standalone Windhawk editor source
+dist/
+__pycache__/
+*.py[cod]
+*.log
+*.exe
+*.dll
+*.obj
+*.pdb
+.vs/
+.vscode/
+.env
+.env.*
+!.env.example
+
+# Local staging audit uses Dekim-PC private environment files
+scripts/audit-staging.ps1

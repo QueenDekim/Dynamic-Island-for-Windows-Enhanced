@@ -1,0 +1,28 @@
+name: Verify Windhawk source bundle
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bundle:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout with integrations
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bundle source
+        run: python scripts/build.py
+      - name: Verify generated bundle
+        shell: pwsh
+        run: |
+          $f = Get-Content dist/mod.wh.cpp -Raw
+          if ($f -notmatch 'DIDiscordIsolatedAudioLevel') { throw 'Discord audio bridge missing' }
+          if ($f -notmatch 'TryReadBrowserBridgeSnapshot') { throw 'Browser media bridge missing' }
+          if ($f -match '#include "\.\./integrations/') { throw 'Unresolved submodule include' }
+          Write-Output 'Bundle verification passed'

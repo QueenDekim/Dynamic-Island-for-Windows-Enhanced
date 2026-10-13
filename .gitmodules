@@ -1,0 +1,8 @@
+[submodule "integrations/browser-media"]
+	path = integrations/browser-media
+	url = https://github.com/QueenDekim/Dynamic-Island-Browser-Media-Plugin.git
+	branch = main
+[submodule "integrations/discord"]
+	path = integrations/discord
+	url = https://github.com/QueenDekim/Dynamic-Island-Discord-Integration.git
+	branch = main
