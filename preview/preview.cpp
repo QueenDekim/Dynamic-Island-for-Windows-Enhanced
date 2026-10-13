@@ -58,7 +58,6 @@ static const PreviewScene scenes[] = {
     {L"camera-detected-v2",IslandKind::Idle,false,false,false,true},
     {L"mic-detected-v2",IslandKind::Idle,false,false,false,true},
     {L"file-tray",IslandKind::Idle,true},
-    {L"lyrics",IslandKind::Media,true},
     {L"themes",IslandKind::Idle,false,false,false,false,true},
 };
 
@@ -71,6 +70,7 @@ static void Seed(SharedState& state, Settings& settings,
     settings.discord=scene.discord;
     settings.weather=true;
     settings.hardwareMonitorModule=true;
+    settings.fileTrayModule=std::wstring(scene.name)==L"file-tray";
     settings.showSeconds=false;
     g_idleTab=0;
     g_discordProcessRunning.store(scene.discord);
@@ -166,6 +166,21 @@ static void Seed(SharedState& state, Settings& settings,
     if(std::wstring(scene.name)==L"hardware-monitor")g_idleTab=3;
     if(std::wstring(scene.name)==L"discord-voice")g_idleTab=1;
     if(std::wstring(scene.name)==L"discord-signed-out")g_idleTab=4;
+    if(std::wstring(scene.name)==L"file-tray") {
+        g_idleTab=FileTrayTabIndex(settings);
+        FileTrayItem document;
+        document.name=L"deployment-notes.md";
+        document.path=L"C:\\Preview\\deployment-notes.md";
+        document.sizeBytes=49152;
+        document.icon=SyntheticArt(3);
+        state.fileTrayItems.push_back(std::move(document));
+        FileTrayItem imageFile;
+        imageFile.name=L"cover-art.png";
+        imageFile.path=L"C:\\Preview\\cover-art.png";
+        imageFile.sizeBytes=731904;
+        imageFile.icon=SyntheticArt(4);
+        state.fileTrayItems.push_back(std::move(imageFile));
+    }
 }
 
 int main(int argc, char** argv) {

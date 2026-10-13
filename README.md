@@ -51,9 +51,9 @@ Windhawk-мода на синтетических данных. Direct2D, Direct
 | :---: | :---: | :---: | :---: |
 | <img src="previews/bluetooth.png" width="220" /> | <img src="previews/timer.png" width="220" /> | <img src="previews/progress.png" width="220" /> | <img src="previews/dnd.png" width="220" /> |
 
-| Files | Lyrics |
-| :---: | :---: |
-| <img src="previews/file-tray.png" width="320" /> | <img src="previews/lyrics.png" width="320" /> |
+### File Tray
+
+<p align="center"><img src="previews/file-tray.png" alt="File Tray" width="400" /></p>
 
 Все изображения: [previews/](previews/). Исходник настоящего рендерера:
 [preview/preview.cpp](preview/preview.cpp).
