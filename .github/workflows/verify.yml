@@ -16,6 +16,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install YAML validation dependency
+        run: python -m pip install PyYAML==6.0.3
       - name: Bundle source
         run: python scripts/build.py
       - name: Validate Windhawk metadata and embedded README
