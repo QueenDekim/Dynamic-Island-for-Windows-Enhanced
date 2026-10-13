@@ -18,6 +18,8 @@ jobs:
           python-version: '3.12'
       - name: Bundle source
         run: python scripts/build.py
+      - name: Validate Windhawk metadata and embedded README
+        run: python scripts/test_mod_metadata.py
       - name: Check integrated behavior
         run: python scripts/test_features.py
       - name: Test Discord notification avatars and voice state

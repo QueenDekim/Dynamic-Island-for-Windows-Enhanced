@@ -1,10 +1,10 @@
 // ==WindhawkMod==
 // @id              dynamic-island-for-windows-enhanced
 // @name            Dynamic Island for Windows Enhanced
-// @description     A living, breathing pill overlay inspired by iPhone's Dynamic Island. Reacts to media, downloads, clipboard, battery, and more.
-// @version         1.3.2
-// @author          Himanshu
-// @github          https://github.com/devcode90
+// @description     Native Direct2D Dynamic Island for Windows: media and browser playback, Discord voice calls, notifications, hardware monitoring, and automatic game overlay.
+// @version         1.4.0
+// @author          DekimDev (Enhanced), Himanshu (original), contributors
+// @github          https://github.com/QueenDekim
 // @include         windhawk.exe
 // @compilerOptions -lole32 -loleaut32 -lshcore -ld2d1 -ldwrite -ldwmapi -lgdi32 -luser32 -lshell32 -lruntimeobject -lwindowscodecs -lavrt -lsetupapi -lwinhttp -lpdh -lwinmm -ladvapi32
 // @license         MIT
@@ -12,81 +12,86 @@
 
 // ==WindhawkModReadme==
 /*
-# Dynamic Island for Windows
+# Dynamic Island for Windows Enhanced
 
-A fluid, living overlay inspired by Apple's Dynamic Island, bringing a beautiful, highly-responsive UI to your Windows desktop. Built natively with hardware-accelerated Direct2D rendering for a buttery-smooth 60 FPS experience.
+Enhanced is a native Windows Dynamic Island built with Direct2D and DirectWrite. The animated desktop overlay combines music playback, optional rich browser media and Discord integrations, Windows activity alerts, weather, system monitoring and automatic game mode.
 
-![Dynamic Island running on the desktop](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/desktop.png)
+This is an independently maintained enhancement of [Dynamic Island for Windows by devcode90](https://github.com/devcode90/Dynamic-Island-for-Windows), not the original mod. Support and development for Enhanced happen in the [Enhanced repository](https://github.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced).
 
-![Dynamic Island surfaces](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/Full-preview-v2.png)
+## Real Direct2D interface previews
 
----
+These images are generated from synthetic states by the **actual C++ Renderer::Render() used in the Windhawk mod**. Windows WIC saves its Direct2D output to PNG. They are not imitations, separately drawn UI cards or real users' data.
 
-## 🚀 Modules & Dashboards
+![Real Direct2D interface overview](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/Full-preview-v2.png)
 
-The Dynamic Island intelligently expands to display context-aware dashboards. You can easily navigate between different views using your mouse scroll wheel.
+| Media | Discord voice | Game Overlay |
+| :---: | :---: | :---: |
+| ![Media player](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/media-v2.png) | ![Discord voice](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/discord-voice.png) | ![Game overlay](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/gamebar-v2.png) |
 
-| Module | Description | Preview |
-| :--- | :--- | :--- |
-| **Media Player** | Shows live album art, track details, audio waveforms, and full playback controls. | ![Media](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/media-v2.png) |
-| **Calendar** | A monthly grid that always fits its rows, with today marked in the accent colour. | ![Calendar](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/calendar.png) |
-| **Weather** | Real-time weather stats powered by wttr.in, including wind speed, humidity, and "feels like" temperature. | ![Weather](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/weather-v2.png) |
-| **Hardware Monitor** | CPU, RAM, GPU, disk and live network throughput, with load bars that turn amber past 75% and red past 90%. | ![Hardware Monitor](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/hardware-monitor.png) |
-| **Game Overlay** | Real-time FPS, CPU, GPU, RAM and disk, sized to whichever metrics you enable. | ![Gamebar](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/gamebar-v2.png) |
-| **Idle View** | A minimal dashboard with your battery status, digital clock, and sleek pagination dots. | ![Idle](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/idle-v2.png) |
-| **Camera Privacy** | Shows a green dot when an app is actively using your webcam. | ![Camera](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/camera-detected-v2.png) |
-| **Mic Privacy** | Shows an orange dot when an app is actively using your microphone. | ![Mic](https://raw.githubusercontent.com/devcode90/Dynamic-Island-for-Windows/793cf954d51aa9748c39d544187fab6e25ecd0fb/previews/mic-detected-v2.png) |
+| Calendar | Weather | Hardware Monitor |
+| :---: | :---: | :---: |
+| ![Calendar](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/calendar.png) | ![Weather](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/weather-v2.png) | ![Hardware monitor](https://raw.githubusercontent.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/main/previews/hardware-monitor.png) |
 
----
+See the [complete native preview gallery](https://github.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/tree/main/previews).
 
-## ✨ Core Features
+## Modules
 
-- **Hardware Privacy Indicators:** A pulsing orange dot appears when your microphone is active, and a green dot when your camera is in use. Rate-limited polling ensures absolutely no CPU drain.
-- **Browser media (including Yandex Browser):** Detects Windows media sessions from browser tabs and prioritizes a playing browser when enabled; audio-session/window-title fallback is available for sites that do not publish metadata.
-- **High-Res Clipboard & Notifications:** Instantly see what you copied or your latest Windows notifications, featuring crisp, high-fidelity 64px app icons extracted directly from system executables.
-- **360Hz+ Dynamic Fluid Animations:** Ultra-smooth resizing and splitting with native support for high refresh rate monitors (up to 360Hz/500Hz+) and zero idle CPU drain.
-- **Eight Curated Themes:** Obsidian, Graphite, Slate, Nord, Evergreen, Espresso, Plum and a light Porcelain, all switchable from the right-click menu's Theme submenu — or dial in your exact hex colors.
-- **Clean Flat Material:** Surfaces are built from soft downward depth shading, a drop shadow, and an accent wash tinted live from your album art. No rim lighting, no glass highlights, no outlined cards — nothing traces a bright line along an edge.
-- **Real Blur & Acrylic Backdrop:** Optionally paint genuine Windows blur or frosted acrylic behind the island so your desktop shows through it, exactly like the system's own surfaces.
-- **Translucent Backgrounds:** Hex colors accept an alpha channel (`#RRGGBBAA`), so you can make the island see-through while keeping text and icons perfectly crisp.
-- **Your Language:** The island's own labels follow your Windows display language across 12 languages, or you can pick one explicitly.
-- **File Tray:** Drag any file onto the island to park it on a shelf, then click to open it. Files are only referenced, never copied or moved.
-- **Typography & Clock Control:** Scale all island text independently of the island's size, choose 12- or 24-hour time, show seconds, and set a custom date pattern — including CJK forms like `yyyy年MM月dd日`.
+- **Music and video:** album art, title, artist, album, playback controls, progress bar and live sound visualizer. The compact media island includes **elapsed/total time**, for example 1:19/2:24.
+- **Browser Media:** Windows media sessions work without extra software. For richer integration with Chromium or Yandex Browser, the optional browser extension and local Native Messaging host provide track metadata, artwork and playback timeline. Browser audio/window-title fallback is approximate if the site does not expose a media session.
+- **Discord voice:** a tab within the same island, with guild/channel names, call duration, participants, microphone state and Discord-only incoming audio waveform. The tab is shown only when Discord Desktop is running and the module is enabled. When in a call it moves to the second tab, immediately after media or clock; otherwise it is last. Entering or switching voice channels briefly expands the island for about five seconds. Discord message notifications show the sender's avatar when available.
+- **Privacy of Discord audio:** voice activity levels use WASAPI Process Loopback for the Discord process tree, **not the entire Windows audio stream**. PCM is discarded after calculating visual levels; no audio is stored or uploaded.
+- **Calendar, clock and weather:** date and monthly calendar views, local time, current temperature and conditions, wind, humidity and feels-like data.
+- **Hardware Monitor:** CPU, GPU, RAM, disk and network throughput indicators.
+- **Game Overlay and automatic game detection:** optional compact metric strip. In Modules, Auto Game Mode overlay attempts to detect a foreground game using game locations, Windows registrations, engine modules/window classes and fullscreen heuristics. The normal island returns on Alt+Tab or game exit. Manual Game Overlay always takes priority. Heuristics may miss unknown windowed games. **The FPS counter measures the island's own render rate**, sampled at most once per second; it is not game engine FPS.
+- **Windows events:** clipboard, system notifications, volume, Caps Lock / Num Lock, devices, Bluetooth status, low battery, file progress, Do Not Disturb and focus timer.
+- **Privacy indicators:** optional colored microphone and camera activity dots.
+- **File Tray:** optional drag-and-drop shelf that keeps references to files and lets you open them without copying or moving them.
+- **Appearance:** eight theme presets, custom colors, transparency, Windows blur/acrylic, font scale, configurable animation and refresh rate, clock format, multiple monitors, pill/notch/Windows 11 shapes.
 
----
+## Install the Windhawk mod
 
-## ⚙️ Usage & Settings
+This is a Windhawk **tool mod** for Windows. Install [Windhawk](https://windhawk.net/) and clone this project with both integration submodules:
 
-- **Hover & Scroll:** Hover over the island to seamlessly expand it. Use your mouse scroll wheel to swipe between the Media, Calendar, Weather, Hardware Monitor, and File Tray tabs.
-- **File Tray:** Enable the File Tray module, then drag files onto the island. It jumps to the shelf to confirm the drop. Click a row to open that file; right-click the island to clear the shelf.
-- **Right-Click Menu:** Right-click the island to access Theme presets, Transparency settings, and to pin the island open.
-- **⚠️ Right-click choices are per-session:** The right-click menu is a quick way to try things out, not a place to configure the mod. **Theme**, **shape style** (Pill / Notch / Windows 11) and **pin open** are all re-applied from your Windhawk settings whenever the mod restarts — so a reboot, a mod update, or toggling the mod off and on will discard them. Anything you want to keep, set in the **Mod Settings** tab instead. (Transparency and Expand-on-hover do persist, but the settings tab is still the reliable place for them.)
-- **Windhawk Settings:** Visit the Mod Settings tab to change the island's Position, Size Scale, Refresh Rate (Target FPS), Animation Style (Smooth/Default/Bouncy/Snappy), Animation Speed, and toggle specific modules. You can also perfectly align the island using the `Offset X` and `Offset Y` settings, and select exactly which monitor the island should appear on (including a "Follow Mouse" mode!).
-- **Yandex Browser media:** Keep `browser://flags/#hardware-media-key-handling` enabled (if offered by your browser version). Rich track title, artist, artwork and playback controls require the website/browser to publish a Windows media session. The optional audio fallback can only infer the browser and active-window title, not an exact background-tab track.
-- **Notifications:** Windows must allow apps to read notifications: turn on **Settings > Privacy & security > Notifications > "Let apps access your notifications"**. Without that permission Windows denies the listener and the module stays silent. Nothing needs to be added to the process inclusion list; the island runs in its own process and reads notifications from there.
-- **Quick Hide/Show:** Right-click the island and choose "Hide Island" to collapse it completely — CPU usage drops to ~0% while hidden since the mod fully parks its render thread. Bring it back instantly with the configurable hotkey (default **Ctrl+Alt+D**, changeable in the **Shortcuts** settings tab). Because a hidden island can't be right-clicked, the hotkey is the *only* way back once hidden — if you turn the hotkey off while hidden, re-enable it (or disable the mod) from Windhawk's settings.
+    git clone --recurse-submodules https://github.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced.git
+    cd Dynamic-Island-for-Windows-Enhanced
+    python scripts/build.py
 
----
+Paste **dist/mod.wh.cpp** into the Windhawk mod editor and compile. This file is the standalone source generated with the required Browser Media and Discord C++ bridges included. The raw src/mod.wh.cpp file by itself is not the complete integration build.
 
-## 📝 Feedback & Credits
+The new mod ID is **dynamic-island-for-windows-enhanced**. It is separate from earlier or upstream IDs; existing settings stored under another ID may not migrate. To avoid duplicate islands, disable previously installed versions before using Enhanced.
 
-### Feedback / Support / Bug Reports
-- Please use [Windhawk Mods Issues](https://github.com/ramensoftware/windhawk-mods/issues) or [dynamic-island-for-windows issues](https://github.com/devcode90/dynamic-island-for-windows/issues) to report bugs, request features, or share feedback.
-- Clear descriptions, screenshots, or steps to reproduce help improve fixes and updates.
-- Suggestions for UI/UX or new integrations are always welcome.
+### Optional Browser Media
 
-### Credits
-- **[Sarthak Singh (sarthakaksh) @GitHub](https://github.com/sarthakaksh)**: Major feature overhaul including the right-click focus timer, hover clock, robust media controls, zero-CPU instant hide shortcut, Bluetooth battery integration, image clipboard thumbnails, and full-screen autohide fixes.
-- **[ciizerr @GitHub](https://github.com/ciizerr)**: Improved the UI by refining layout alignment, fixing dashboard scaling, and enhancing calendar and weather module integration.
-- **[ChrisSch-dev @GitHub](https://github.com/ChrisSch-dev)**: Added album title support, word wrapping for weather descriptions, sleep resume fixes, and various performance/movement stability improvements.
-- **[thevioletto @GitHub](https://github.com/thevioletto)**: Added custom font support, Windows Do Not Disturb integration and status alerts, improved album art color sampling, reorganized settings, and addressed various UI/media edge cases.
+Install the unpacked Chromium/Yandex extension and register its local Native Messaging host as described in [Browser Media Plugin](https://github.com/QueenDekim/Dynamic-Island-Browser-Media-Plugin). The island's ordinary Windows media session handling still works without this companion integration.
 
-### 🤝 Contributing
-We love community contributions! To ensure high-quality updates, please follow these rules:
-1. **Fork & Branch:** Fork the repository and apply your feature or fix.
-2. **Respect Existing Features:** Do not outright remove or break other people's features unless fully explained why in your PR. You are highly encouraged to refine and improve existing features!
-3. **Credit Yourself:** After completing your feature, add your name and a short summary of your contribution to the **Credits** section in both the Mod UI here and the GitHub `README.md`!
+### Optional Discord integration
 
+Full Discord voice data and notifications need Discord Desktop, the local Python RPC agent, an OAuth2 application and the configured HTTPS OAuth backend. Follow [Discord Integration](https://github.com/QueenDekim/Dynamic-Island-Discord-Integration) for the agent, permission and backend setup. The Discord tab provides Log in / Log out. OAuth tokens are stored locally with Windows DPAPI; neither a Discord bot nor extraction of a user token is required. Some RPC scopes require Discord approval.
+
+## Settings and operation
+
+- **Modules:** toggle Media, Discord, Weather, Hardware Monitor, File Tray and other integrations.
+- **Modules / Auto Game Mode overlay:** enable automatic game detection. **Enable game overlay mode** is the separate manual override. The fullscreen auto-hide setting does not hide an active Game Overlay.
+- **Modules / Auto-expand on track change:** show the full media card briefly when a new track starts. Discord voice join/switch has independent auto-expand behavior.
+- **Behavior / Expand on hover:** hover to expand; when disabled click to expand. Scroll the mouse wheel to navigate expanded dashboard tabs.
+- **Animations, Themes, Appearance:** set refresh rate, spring animation style, accent colors, shape, opacity, text scale, position and monitor.
+- **Shortcuts / Hide/show:** hide or reveal the island using the configurable hotkey (default **Ctrl+Alt+D**). Keep the hotkey enabled if using manual hide.
+
+Enabling a checkbox does not automatically install the optional browser extension, local agent or OAuth backend. Windows notifications and privacy status require system permissions.
+
+## Privacy and limitations
+
+Discord process audio is measured locally; raw sound is not sent to the backend. Do not commit Client Secrets, OAuth credentials, access tokens or bridge API keys. Discord, browser and Windows integrations are subject to the permissions and APIs made available by the current apps and Windows version. Exclusive fullscreen games might not allow third-party overlays.
+
+## Feedback, credits and license
+
+**Issues and feature requests:** [Enhanced GitHub Issues](https://github.com/QueenDekim/Dynamic-Island-for-Windows-Enhanced/issues).
+
+**Enhanced maintenance and integrations:** [DekimDev / QueenDekim](https://github.com/QueenDekim).
+
+**Original project:** [Himanshu / devcode90](https://github.com/devcode90/Dynamic-Island-for-Windows). Original upstream contributors include [sarthakaksh](https://github.com/sarthakaksh), [ciizerr](https://github.com/ciizerr), [ChrisSch-dev](https://github.com/ChrisSch-dev) and [thevioletto](https://github.com/thevioletto).
+
+The original Windhawk mod declares the **MIT license**, which Enhanced retains. Companion tools and dependencies may carry separate licenses.
 */
 // ==/WindhawkModReadme==
 
@@ -315,7 +320,7 @@ We love community contributions! To ensure high-quality updates, please follow t
 - Modules:
   - Media: true
     $name: Media module
-    $description: Shows album art, song info, and playback controls when music is playing.
+    $description: Shows album art, song info, elapsed/total time in the compact island, waveform, progress and playback controls.
   - BrowserMediaPriority: true
     $name: Prefer playing browser media
     $description: When several applications play audio simultaneously, prefer an active browser media session (especially Yandex Browser). Disable to follow the Windows current media session first.
@@ -324,7 +329,7 @@ We love community contributions! To ensure high-quality updates, please follow t
     $description: Uses Windows audio-session activity and the browser window title when sites or the browser do not publish song metadata to Windows. The fallback title is an approximation, no album art or timeline is provided, and media controls may be unavailable.
   - Discord: true
     $name: Discord voice channel
-    $description: Separate Discord call card with server, channel, participants, microphone state and incoming audio meter. Requires the authorized local Discord agent.
+    $description: Discord tab within the main island: server, voice channel, participants, duration, microphone status and isolated incoming audio. Requires Discord Desktop and an authorized local agent. During a call Discord becomes the second tab; channel changes expand the island briefly.
   - MediaAutoExpand: false
     $name: Auto-expand on track change
     $description: Automatically expand the island when a new song or video starts playing. If disabled, album art updates smoothly in the collapsed pill without unprompted expansion.
@@ -363,7 +368,7 @@ We love community contributions! To ensure high-quality updates, please follow t
     $description: Suppresses Dynamic Island notification alerts when Windows Do Not Disturb is active.
   - HardwareMonitorModule: true
     $name: Include Hardware Monitor in scroll loop
-    $description: Add CPU, GPU, RAM, FPS and Network stats card to mouse-wheel scroll loop.
+    $description: Include the Hardware Monitor dashboard with CPU, GPU, RAM, disk and network metrics in the expanded mouse-wheel tab loop.
   - GameOverlay: false
     $name: Enable game overlay mode
     $description: Manually keep the game statistics overlay enabled, even without an active game.
@@ -375,7 +380,7 @@ We love community contributions! To ensure high-quality updates, please follow t
     $description: Adds text labels (like "CPU") inside the game overlay bars.
   - Weather: true
     $name: Weather module
-    $description: Shows the weather on the right side of the pill. Turn off to only show the clock.
+    $description: Enable weather details in the compact island and the expanded weather dashboard. Disable to remove the weather tab.
   - WeatherCity: ""
     $name: Weather City (Optional)
     $description: Enter your city (e.g. London). Leave blank to use auto IP geolocation.
@@ -426,7 +431,7 @@ We love community contributions! To ensure high-quality updates, please follow t
     $description: 'Comma-separated list of app or site names that should never make the island expand on a track change, while still updating quietly in the collapsed pill. Matched loosely against the media source and title, for example: chrome, tiktok, youtube.'
   - GameOverlayShowFps: true
     $name: Game overlay - show FPS
-    $description: Include the frame rate in the game overlay strip.
+    $description: Show the island's own measured render FPS (updated at most once per second); this is not the game's engine FPS.
   - GameOverlayShowCpu: true
     $name: Game overlay - show CPU
     $description: Include CPU utilization in the game overlay strip.
