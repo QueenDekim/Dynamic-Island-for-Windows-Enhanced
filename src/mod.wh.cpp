@@ -329,7 +329,7 @@ The original Windhawk mod declares the **MIT license**, which Enhanced retains. 
     $description: Uses Windows audio-session activity and the browser window title when sites or the browser do not publish song metadata to Windows. The fallback title is an approximation, no album art or timeline is provided, and media controls may be unavailable.
   - Discord: true
     $name: Discord voice channel
-    $description: Discord tab within the main island: server, voice channel, participants, duration, microphone status and isolated incoming audio. Requires Discord Desktop and an authorized local agent. During a call Discord becomes the second tab; channel changes expand the island briefly.
+    $description: 'Discord tab within the main island: server, voice channel, participants, duration, microphone status and isolated incoming audio. Requires Discord Desktop and an authorized local agent. During a call Discord becomes the second tab; channel changes expand the island briefly.'
   - MediaAutoExpand: false
     $name: Auto-expand on track change
     $description: Automatically expand the island when a new song or video starts playing. If disabled, album art updates smoothly in the collapsed pill without unprompted expansion.
