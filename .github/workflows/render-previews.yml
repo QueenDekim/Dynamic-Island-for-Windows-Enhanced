@@ -1,12 +1,13 @@
-name: Publish synthetic UI previews
+name: Publish real Direct2D interface previews
 
 on:
   push:
     branches: [main]
     paths:
-      - 'src/mod.wh.cpp'
-      - 'scripts/render_previews.py'
-      - 'tests/test_previews.py'
+      - 'src/**'
+      - 'preview/**'
+      - 'scripts/build.py'
+      - 'README.md'
       - '.github/workflows/render-previews.yml'
   workflow_dispatch:
 
@@ -14,47 +15,64 @@ permissions:
   contents: write
 
 concurrency:
-  group: island-synthetic-previews-main
+  group: real-direct2d-island-previews
   cancel-in-progress: false
 
 jobs:
-  previews:
+  native-render:
     runs-on: windows-latest
     steps:
-      - name: Checkout main
+      - name: Checkout including Git submodules
         uses: actions/checkout@v4
         with:
-          ref: main
+          submodules: recursive
           persist-credentials: true
-      - name: Setup Python
+      - name: Install Windhawk 1.6 official compiler
+        shell: pwsh
+        run: ./preview/setup-compiler.ps1
+      - name: Setup Python for bundling (not drawing)
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install exact preview renderer version
-        run: python -m pip install Pillow==12.3.0
-      - name: Render all modules using synthetic data
-        run: python scripts/render_previews.py
-      - name: Verify complete and referenced preview set
-        run: python tests/test_previews.py
-      - name: Upload ready-to-view PNG artifact
+      - name: Build bundled Windhawk source
+        run: python scripts/build.py
+      - name: Compile actual renderer into native Windows executable
+        shell: pwsh
+        run: ./preview/build-preview.ps1
+      - name: Remove outdated gallery files
+        shell: pwsh
+        run: |
+          if (Test-Path previews) {
+            Get-ChildItem previews -Filter '*.png' | Remove-Item -Force
+          }
+      - name: Render actual Direct2D UI from synthetic SharedState
+        shell: pwsh
+        run: |
+          ./dist/real-preview.exe previews
+          if ($LASTEXITCODE -ne 0) { throw "Native renderer failed" }
+      - name: Compose overview from real frames only
+        shell: pwsh
+        run: ./preview/make-montage.ps1
+      - name: Validate native UI gallery and README
+        run: python preview/verify_previews.py
+      - name: Upload verified native screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: synthetic-island-previews
+          name: real-direct2d-island-previews
           path: previews/*.png
           retention-days: 90
-      - name: Publish updated previews to main
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      - name: Publish rebuilt frames to GitHub README
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- previews/
+          git add -A -- previews
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "All preview PNGs are already up to date."
+            Write-Host "Real Direct2D previews already match main."
             exit 0
           }
-          git commit -m "chore: regenerate synthetic island previews [skip ci]"
-          if ($LASTEXITCODE -ne 0) { throw "Preview commit failed" }
+          git commit -m "docs: refresh native Direct2D previews [skip ci]"
+          if ($LASTEXITCODE -ne 0) { throw "Commit failed" }
           git push origin HEAD:main
-          if ($LASTEXITCODE -ne 0) { throw "Preview publish failed; artifact is available." }
+          if ($LASTEXITCODE -ne 0) { throw "Publication failed; artifact is available" }

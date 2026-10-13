@@ -4,68 +4,59 @@
 
 ## 📸 See it in Action
 
-<sub>Демонстрационные рендеры на синтетических данных: визуальная документация,
-не скриншоты работающего процесса Windhawk. Генерируются через GitHub Actions.</sub>
+Все изображения ниже — **реальные кадры C++ Renderer::Render()** этого
+Windhawk-мода на синтетических данных. Direct2D, DirectWrite, размеры,
+материалы и сами функции рисования являются общими с рабочим плагином.
+Кадры кодируются в PNG средствами Windows WIC, а не перерисовываются вручную.
 
-<p align="center">
-  <img src="previews/desktop.png" alt="Dynamic Island Enhanced — desktop illustration" width="900" />
-</p>
-
-<p align="center">
-  <img src="previews/Full-preview-v2.png" alt="Overview of Enhanced island surfaces" width="760" />
-</p>
+<p align="center"><img src="previews/Full-preview-v2.png" alt="Real Direct2D screenshot gallery" width="900" /></p>
 
 ### Dashboards
 
 | Media Player | Calendar | Weather | Game Overlay | Idle View |
 | :---: | :---: | :---: | :---: | :---: |
-| <img src="previews/media-v2.png" width="200" alt="Media" /> | <img src="previews/calendar.png" width="200" alt="Calendar" /> | <img src="previews/weather-v2.png" width="200" alt="Weather" /> | <img src="previews/gamebar-v2.png" width="200" alt="Game overlay" /> | <img src="previews/idle-v2.png" width="200" alt="Idle" /> |
+| <img src="previews/media-v2.png" width="220" /> | <img src="previews/calendar.png" width="220" /> | <img src="previews/weather-v2.png" width="220" /> | <img src="previews/gamebar-v2.png" width="220" /> | <img src="previews/idle-v2.png" width="220" /> |
 
 ### Hardware Monitor
 
-<p align="center">
-  <img src="previews/hardware-monitor.png" alt="Hardware Monitor" width="420" />
-</p>
+<p align="center"><img src="previews/hardware-monitor.png" alt="Hardware Monitor" width="600" /></p>
 
 ### Themes
 
-<p align="center">
-  <img src="previews/themes.png" alt="Themes" width="760" />
-</p>
+<p align="center"><img src="previews/themes.png" alt="Real renderer theme example" width="400" /></p>
 
 ### Privacy Indicators
 
 | Camera Detected | Microphone Detected |
 | :---: | :---: |
-| <img src="previews/camera-detected-v2.png" width="200" alt="Camera active" /> | <img src="previews/mic-detected-v2.png" width="200" alt="Microphone active" /> |
+| <img src="previews/camera-detected-v2.png" width="220" /> | <img src="previews/mic-detected-v2.png" width="220" /> |
 
-### Enhanced — Media & Discord
+### Enhanced — Media and Discord
 
-| Compact Media | Discord Voice | Discord Connected | Discord Notification |
+| Compact media | Voice chat | Expanded Discord | Sign in |
 | :---: | :---: | :---: | :---: |
-| <img src="previews/compact-media.png" width="220" alt="Collapsed media player" /> | <img src="previews/discord-voice-compact.png" width="220" alt="Collapsed Discord voice" /> | <img src="previews/discord-voice.png" width="220" alt="Discord dashboard" /> | <img src="previews/discord-notification.png" width="220" alt="Discord incoming message" /> |
+| <img src="previews/compact-media.png" width="220" /> | <img src="previews/discord-voice-compact.png" width="220" /> | <img src="previews/discord-voice.png" width="220" /> | <img src="previews/discord-signed-out.png" width="220" /> |
 
-### System Events
+### System notifications and events
 
-| Notification | Volume | Brightness | Clipboard |
+| Discord message | Notification | Clipboard | Volume |
 | :---: | :---: | :---: | :---: |
-| <img src="previews/notification.png" width="220" /> | <img src="previews/volume.png" width="220" /> | <img src="previews/brightness.png" width="220" /> | <img src="previews/clipboard.png" width="220" /> |
+| <img src="previews/discord-notification.png" width="220" /> | <img src="previews/notification.png" width="220" /> | <img src="previews/clipboard.png" width="220" /> | <img src="previews/volume.png" width="220" /> |
 
-| Caps Lock | Num Lock | USB / Device | Bluetooth |
+| Battery | Caps Lock | Num Lock | Device |
 | :---: | :---: | :---: | :---: |
-| <img src="previews/caps-lock.png" width="220" /> | <img src="previews/num-lock.png" width="220" /> | <img src="previews/device.png" width="220" /> | <img src="previews/bluetooth.png" width="220" /> |
+| <img src="previews/battery-low.png" width="220" /> | <img src="previews/caps-lock.png" width="220" /> | <img src="previews/num-lock.png" width="220" /> | <img src="previews/device.png" width="220" /> |
 
-| Timer | Battery | Progress | Do Not Disturb |
+| Bluetooth | Timer | Download progress | Do Not Disturb |
 | :---: | :---: | :---: | :---: |
-| <img src="previews/timer.png" width="220" /> | <img src="previews/battery-low.png" width="220" /> | <img src="previews/progress.png" width="220" /> | <img src="previews/dnd.png" width="220" /> |
+| <img src="previews/bluetooth.png" width="220" /> | <img src="previews/timer.png" width="220" /> | <img src="previews/progress.png" width="220" /> | <img src="previews/dnd.png" width="220" /> |
 
-| File Tray | Focus Timer | Lyrics | Discord Login |
-| :---: | :---: | :---: | :---: |
-| <img src="previews/file-tray.png" width="220" /> | <img src="previews/focus-timer.png" width="220" /> | <img src="previews/lyrics.png" width="220" /> | <img src="previews/discord-signed-out.png" width="220" /> |
+| Files | Lyrics |
+| :---: | :---: |
+| <img src="previews/file-tray.png" width="320" /> | <img src="previews/lyrics.png" width="320" /> |
 
-Весь набор сценариев (32 PNG) хранится в [previews/](previews/). Изображения
-генерирует [scripts/render_previews.py](scripts/render_previews.py) без сети и
-без чтения пользовательских данных.
+Все изображения: [previews/](previews/). Исходник настоящего рендерера:
+[preview/preview.cpp](preview/preview.cpp).
 
 ---
 
@@ -219,34 +210,19 @@ python scripts/build.py
 ~~~
 
 
-## Synthetic preview pipeline
+## Native Direct2D previews in GitHub Actions
 
-README previews follow the upstream project's visual section order:
-See it in Action, Dashboards, Hardware Monitor, Themes, Privacy Indicators,
-followed by Enhanced features and system events.
+GitHub Actions использует Windows runner и компилятор Windhawk 1.6.
+Он компилирует оригинальный Renderer из собранного mod.wh.cpp, заполняет
+SharedState и Settings синтетическими данными, рендерит Direct2D в DIB,
+кодирует через WIC, затем создаёт сводную панель из реальных PNG.
 
-All 14 IslandKind values have mapped synthetic scenarios. The 32 PNG files
-are generated offline from deterministic synthetic state by
-scripts/render_previews.py using Pillow 12.3.0 and native Windows Segoe UI.
-They are illustrative renders; they are not screenshots of an actual Windhawk
-process and do not read tokens, Discord messages, system sensors, or browser data.
+Команды локальной проверки:
 
-Run locally:
+    python scripts/build.py
+    powershell -File preview/build-preview.ps1
+    dist/real-preview.exe previews
+    powershell -File preview/make-montage.ps1
+    python preview/verify_previews.py
 
-~~~powershell
-python -m pip install Pillow==12.3.0
-python scripts/render_previews.py
-python tests/test_previews.py
-~~~
-
-GitHub Actions:
-- verify.yml renders and validates all previews, then publishes them as a
-  downloadable workflow artifact.
-- render-previews.yml runs when UI source or the renderer changes and on manual
-  workflow_dispatch. It renders and uploads the gallery, then updates committed
-  previews on main only when the PNGs changed.
-- Tests verify coverage of every IslandKind and every linked README image.
-
-In the Game Overlay, FPS is sampled into one displayed value no more than once
-per second, while the island's normal animation frame pacing stays unchanged.
-The displayed counter describes the overlay's own measured frame pacing.
+Никаких Pillow-мокапов и второго UI-рендерера.

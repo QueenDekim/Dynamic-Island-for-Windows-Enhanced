@@ -7230,9 +7230,13 @@ class Renderer {
             if (!CreateBackingBitmap(pixelWidth, pixelHeight)) {
                 return false;
             }
+#ifndef DYNAMIC_ISLAND_PREVIEW
             PositionOverlayWindow(hwnd_, pixelWidth, pixelHeight);
+#endif
         } else if (g_layoutDirty.exchange(false)) {
+#ifndef DYNAMIC_ISLAND_PREVIEW
             PositionOverlayWindow(hwnd_, pixelWidth, pixelHeight);
+#endif
         }
 
         RECT rc = {0, 0, bitmapWidth_, bitmapHeight_};
@@ -7281,6 +7285,11 @@ class Renderer {
             return false;
         }
 
+#ifdef DYNAMIC_ISLAND_PREVIEW
+        // Screenshot the identical Direct2D pixels without displaying a live
+        // overlay or depending on an interactive desktop/session.
+        return true;
+#endif
         POINT src = {0, 0};
         SIZE size = {bitmapWidth_, bitmapHeight_};
         POINT dst = {};
@@ -7297,6 +7306,51 @@ class Renderer {
         return UpdateLayeredWindow(hwnd_, nullptr, &dst, &size, memDc_, &src, 0, &blend,
                                    ULW_ALPHA) != FALSE;
     }
+
+#ifdef DYNAMIC_ISLAND_PREVIEW
+    // Native CI previews use the same render target, drawing routines,
+    // brushes, typography, and layout as the Windhawk module.
+    bool SavePreviewPng(const std::wstring& filename) {
+        if (!dibBits_ || bitmapWidth_ < 1 || bitmapHeight_ < 1) return false;
+        ComPtr<IWICImagingFactory> factory;
+        if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr,
+                       CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.GetAddressOf()))))
+            return false;
+        ComPtr<IWICStream> stream;
+        if (FAILED(factory->CreateStream(stream.GetAddressOf())) ||
+            FAILED(stream->InitializeFromFilename(filename.c_str(), GENERIC_WRITE)))
+            return false;
+        ComPtr<IWICBitmapEncoder> encoder;
+        if (FAILED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr,
+                                         encoder.GetAddressOf())) ||
+            FAILED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)))
+            return false;
+        ComPtr<IWICBitmapFrameEncode> frame;
+        ComPtr<IPropertyBag2> options;
+        if (FAILED(encoder->CreateNewFrame(frame.GetAddressOf(), options.GetAddressOf())) ||
+            FAILED(frame->Initialize(options.Get())) ||
+            FAILED(frame->SetSize(bitmapWidth_, bitmapHeight_)))
+            return false;
+        // PNG encoder negotiates straight-alpha BGRA rather than D2D's
+        // premultiplied-alpha BGRA. Use WIC's real pixel-format conversion.
+        WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
+        if (FAILED(frame->SetPixelFormat(&format))) return false;
+        const UINT stride = static_cast<UINT>(bitmapWidth_) * 4;
+        const UINT count = stride * static_cast<UINT>(bitmapHeight_);
+        ComPtr<IWICBitmap> image;
+        if (FAILED(factory->CreateBitmapFromMemory(bitmapWidth_, bitmapHeight_,
+                          GUID_WICPixelFormat32bppPBGRA, stride, count,
+                          reinterpret_cast<BYTE*>(dibBits_),
+                          image.GetAddressOf()))) return false;
+        ComPtr<IWICFormatConverter> converter;
+        if (FAILED(factory->CreateFormatConverter(converter.GetAddressOf())) ||
+            FAILED(converter->Initialize(image.Get(), format,
+                           WICBitmapDitherTypeNone, nullptr, 0,
+                           WICBitmapPaletteTypeCustom))) return false;
+        return SUCCEEDED(frame->WriteSource(converter.Get(), nullptr)) &&
+               SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
+    }
+#endif
 
     void Shutdown() {
         marqueeTitleCache_.layout.Reset();
@@ -7486,6 +7540,7 @@ class Renderer {
         }
 
         oldBitmap_ = static_cast<HBITMAP>(SelectObject(memDc_, dib_));
+        dibBits_ = bits;
         bitmapWidth_ = width;
         bitmapHeight_ = height;
         return true;
@@ -11608,6 +11663,7 @@ class Renderer {
     HWND hwnd_ = nullptr;
     HDC memDc_ = nullptr;
     HBITMAP dib_ = nullptr;
+    void* dibBits_ = nullptr;
     HBITMAP oldBitmap_ = nullptr;
     int bitmapWidth_ = 0;
     int bitmapHeight_ = 0;
