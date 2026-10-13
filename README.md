@@ -76,3 +76,14 @@ python scripts/build.py
 - Windows + установленный Windhawk Compiler: clang++ -fsyntax-only dist/mod.wh.cpp с флагами редактора Windhawk.
 - Тесты браузерной интеграции и Discord-агента находятся в отдельных submodule.
 - Проверка уровней звука в реальном звонке необходима после компиляции мода; локальный smoke-тест WASAPI подтверждает создание изолированного захвата.
+
+
+### Обновление исходника редактора Windhawk на Windows
+
+После python scripts/build.py можно безопасно установить автономный файл в рабочий EditorWorkspace:
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_editor.ps1
+~~~
+
+Если установленный Windhawk требует доступа администратора к ProgramData, запустите PowerShell с повышенными правами. Скрипт делает резервную копию текущего mod.wh.cpp внутри dist/ и сверяет SHA-256 после копирования. Затем переоткройте редактор Windhawk и скомпилируйте мод.
