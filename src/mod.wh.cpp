@@ -6,7 +6,7 @@
 // @author          Himanshu
 // @github          https://github.com/devcode90
 // @include         windhawk.exe
-// @compilerOptions -lole32 -loleaut32 -lshcore -ld2d1 -ldwrite -ldwmapi -lgdi32 -luser32 -lshell32 -lruntimeobject -lwindowscodecs -lavrt -lsetupapi -lwinhttp -lpdh -lwinmm
+// @compilerOptions -lole32 -loleaut32 -lshcore -ld2d1 -ldwrite -ldwmapi -lgdi32 -luser32 -lshell32 -lruntimeobject -lwindowscodecs -lavrt -lsetupapi -lwinhttp -lpdh -lwinmm -ladvapi32
 // @license         MIT
 // ==/WindhawkMod==
 
@@ -366,7 +366,10 @@ We love community contributions! To ensure high-quality updates, please follow t
     $description: Add CPU, GPU, RAM, FPS and Network stats card to mouse-wheel scroll loop.
   - GameOverlay: false
     $name: Enable game overlay mode
-    $description: Replaces the clock with live stats like FPS, CPU, and RAM usage.
+    $description: Manually keep the game statistics overlay enabled, even without an active game.
+  - AutoGameOverlay: false
+    $name: Auto Game Mode overlay
+    $description: Automatically show Game Overlay while a game is in the foreground, then restore the island on exit or Alt+Tab. Detects registered games, Steam/Epic/GOG installations, game engines and non-browser fullscreen applications. Manual Game Overlay takes priority.
   - ShowMetricText: false
     $name: Show labels in metric chips
     $description: Adds text labels (like "CPU") inside the game overlay bars.
@@ -997,6 +1000,7 @@ struct Settings {
     float tintOpacity = 0.72f;
     float pillOpacity = 0.96f;
     bool gameOverlay = false;
+    bool autoGameOverlay = false;
     bool showMetricText = true;
     bool weather = true;
     std::wstring weatherCity;
@@ -1340,6 +1344,7 @@ HANDLE g_weatherThread = nullptr;
 HANDLE g_notificationThread = nullptr;
 HANDLE g_bluetoothThread = nullptr;
 std::atomic<bool> g_running = false;
+std::atomic<bool> g_autoGameOverlayActive{false};
 std::atomic<int> g_idleTab = 0;
 // These atomics are updated by the Discord reader thread. They are also the
 // single source of truth for visible tabs, tab indexes and mouse hit testing.
@@ -1388,6 +1393,14 @@ constexpr GUID kSubTypeIeeeFloat = {
 };
 
 
+
+bool IsGameOverlayActive(const Settings& settings) {
+    // An explicit manual toggle always wins over automatic detection.
+    return settings.gameOverlay ||
+           Wh_GetIntValue(L"GameOverlayPinned", 0) != 0 ||
+           (settings.autoGameOverlay &&
+            g_autoGameOverlayActive.load(std::memory_order_relaxed));
+}
 
 double NowSeconds() {
     using clock = std::chrono::steady_clock;
@@ -2073,6 +2086,8 @@ bool IsForegroundFullscreen(HWND targetHwnd) {
     return false;
 }
 
+#include "game_detection.h"
+
 // Returns the DPI scale factor for the primary monitor (1.0 = 96 DPI = 100%)
 float GetPrimaryMonitorDpiScale() {
     POINT pt = {0, 0};
@@ -2356,6 +2371,7 @@ void LoadSettings() {
     next.pillOpacity = Clamp((localOpacity >= 0 ? localOpacity : settingOpacity) / 100.0f,
                              0.35f, 1.0f);
     next.gameOverlay = Wh_GetIntSetting(L"Modules.GameOverlay") != 0;
+    next.autoGameOverlay = Wh_GetIntSetting(L"Modules.AutoGameOverlay") != 0;
     next.showMetricText = Wh_GetIntSetting(L"Modules.ShowMetricText") != 0;
     next.weather = Wh_GetIntSetting(L"Modules.Weather") != 0;
     next.weatherCity = GetStringSettingWithFallback(L"Modules.WeatherCity", L"Weather.WeatherCity", L"CalendarWeather.WeatherCity");
@@ -7232,7 +7248,7 @@ class Renderer {
         settingsOpacity_ = settings.pillOpacity;
 
         const bool gameMetricsPresent = primary.kind == IslandKind::Idle &&
-            (settings.gameOverlay || Wh_GetIntValue(L"GameOverlayPinned", 0) != 0);
+            (IsGameOverlayActive(settings));
         const float hoverScale = (settings.expandOnHover && ((hover && !gameMetricsPresent) || pinned)) ? 1.025f : 1.0f;
         const float scale = hoverScale;
 
@@ -7863,7 +7879,7 @@ class Renderer {
 
         const float contentH = unscaledRect.bottom - unscaledRect.top;
         const bool compactDiscord = settings.discord && state.discord.connected &&
-            !settings.gameOverlay &&
+            !IsGameOverlayActive(settings) &&
             (activity.kind == IslandKind::Idle || activity.kind == IslandKind::Media) &&
             contentH < 66.0f && (unscaledRect.right - unscaledRect.left) > 220.0f;
         D2D1_RECT_F contentRect = unscaledRect;
@@ -9427,7 +9443,7 @@ class Renderer {
 
     void DrawIdleDashboard(const SharedState& state, D2D1_RECT_F rect, const Settings& settings,
                            double now) {
-        if (settings.gameOverlay || Wh_GetIntValue(L"GameOverlayPinned", 0) != 0) {
+        if (IsGameOverlayActive(settings)) {
             DrawGameOverlay(state, rect, 1.0f);
             return;
         }
@@ -12458,7 +12474,7 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 }
                 const bool gameMetricsPresent =
                     !kinds.empty() && kinds[0] == IslandKind::Idle &&
-                    (g_settings.gameOverlay || Wh_GetIntValue(L"GameOverlayPinned", 0) != 0);
+                    (IsGameOverlayActive(g_settings));
 
                 bool expanded = Wh_GetIntValue(L"PinnedExpanded", 0) != 0 || g_clickExpanded.load();
                 if (!gameMetricsPresent && !g_settings.expandOnHover && !expanded) {
@@ -12759,6 +12775,7 @@ DWORD WINAPI RenderThreadProc(void*) {
     double nextProgressPoll = 0.0;
     double nextSystemPoll = 0.0;
     double nextPrivacyPoll = 0.0;
+    double nextGameCheck = 0.0;
     bool wasManuallyHidden = false;
     bool wasAutoHiddenParked = false;
     bool parkedForFullscreen = false;
@@ -12808,6 +12825,27 @@ DWORD WINAPI RenderThreadProc(void*) {
             continue;
         }
 
+        // Poll the foreground game while idle/auto-parked as well, so launching
+        // a game can wake the overlay even when Auto-hide parked the window.
+        // This stays opt-in and only queries Windows roughly once per second.
+        const double gameCheckNow = NowSeconds();
+        if (gameCheckNow >= nextGameCheck) {
+            nextGameCheck = gameCheckNow + 1.0;
+            const bool gameFound = g_settings.autoGameOverlay &&
+                DIIsForegroundGame(hwnd, IsForegroundFullscreen(hwnd));
+            const bool wasGame = g_autoGameOverlayActive.exchange(
+                gameFound, std::memory_order_relaxed);
+            if (gameFound != wasGame) {
+                g_layoutDirty = true;
+                g_idleTab = 0;
+                if (gameFound) {
+                    // Auto-unpark, but NEVER override the explicit manual hide.
+                    g_autoHiddenParked = false;
+                    lastInteractionTime = gameCheckNow;
+                }
+            }
+        }
+
         // Sits ahead of the parked branch below on purpose: that branch can block
         // for up to 1.5s, and the mouse thread needs to hear about a transition
         // before that, not after.
@@ -12830,7 +12868,8 @@ DWORD WINAPI RenderThreadProc(void*) {
                 if (parkedForFullscreen) {
                     MsgWaitForMultipleObjects(1, &g_stopEvent, FALSE, 1500, QS_ALLINPUT);
                     const bool stillFullscreen =
-                        g_settings.autoHideFullscreen && IsForegroundFullscreen(hwnd);
+                        g_settings.autoHideFullscreen && !IsGameOverlayActive(g_settings) &&
+                        IsForegroundFullscreen(hwnd);
                     g_isFullscreen.store(stillFullscreen, std::memory_order_relaxed);
                     if (!stillFullscreen) {
                         g_fullscreenOverrideVisible = false;
@@ -12839,7 +12878,8 @@ DWORD WINAPI RenderThreadProc(void*) {
                         g_autoHiddenParked = false;
                     }
                 } else {
-                    MsgWaitForMultipleObjects(1, &g_stopEvent, FALSE, INFINITE, QS_ALLINPUT);
+                    MsgWaitForMultipleObjects(1, &g_stopEvent, FALSE,
+                        g_settings.autoGameOverlay ? 1000 : INFINITE, QS_ALLINPUT);
                 }
                 nextFrameTarget = std::chrono::steady_clock::now();
                 continue;
@@ -12933,7 +12973,12 @@ DWORD WINAPI RenderThreadProc(void*) {
                 TriggerNudge();
         }
 
-        const std::vector<IslandKind> kinds = ChooseActivities(snapshot, g_settings, now);
+        std::vector<IslandKind> kinds = ChooseActivities(snapshot, g_settings, now);
+        if (IsGameOverlayActive(g_settings)) {
+            // Suppress other primary activities while game statistics are shown.
+            // On game exit, ChooseActivities immediately restores the normal view.
+            kinds.assign(1, IslandKind::Idle);
+        }
         Activity primary = ActivityForKind(kinds[0], g_settings, snapshot);
         std::optional<Activity> secondary;
         if (kinds.size() >= 2) {
@@ -13014,7 +13059,8 @@ DWORD WINAPI RenderThreadProc(void*) {
                                  primary.kind == IslandKind::DoNotDisturb ||
                                  (g_settings.discord && snapshot.discord.connected &&
                                   (primary.kind == IslandKind::Idle || primary.kind == IslandKind::Media)) ||
-                                 recentTrackChange || recentDiscordChange);
+                                 recentTrackChange || recentDiscordChange ||
+                                 IsGameOverlayActive(g_settings));
 
         const bool unhideGraceActive = (now < g_hotkeyUnhideUntil.load());
         const bool hoverUnhides = g_settings.unhideOnHover && hover;
@@ -13030,7 +13076,7 @@ DWORD WINAPI RenderThreadProc(void*) {
 
         bool isHoverExpanded = g_settings.expandOnHover ? hover : (hover && g_clickExpanded.load());
         const bool gameMetricsPresent = primary.kind == IslandKind::Idle &&
-            (g_settings.gameOverlay || Wh_GetIntValue(L"GameOverlayPinned", 0) != 0);
+            (IsGameOverlayActive(g_settings));
         if (gameMetricsPresent) {
             isHoverExpanded = false;
         }
@@ -13057,7 +13103,10 @@ DWORD WINAPI RenderThreadProc(void*) {
         static bool isFullscreen = false;
         static double lastFullscreenCheck = -1.0;  // -1.0 guarantees the very first iteration checks
         if (now - lastFullscreenCheck > 0.5) {
-            const bool newFullscreen = g_settings.autoHideFullscreen && IsForegroundFullscreen(hwnd);
+            const bool newFullscreen =
+                g_settings.autoHideFullscreen &&
+                !IsGameOverlayActive(g_settings) &&
+                IsForegroundFullscreen(hwnd);
             if (isFullscreen && !newFullscreen) {
                 // Fullscreen ended — re-arm so the next fullscreen session
                 // hides again even if the hotkey was used to reveal the
@@ -13122,7 +13171,7 @@ DWORD WINAPI RenderThreadProc(void*) {
             }
         }
         if (!isFullscreen && primary.kind == IslandKind::Idle &&
-            (g_settings.gameOverlay || Wh_GetIntValue(L"GameOverlayPinned", 0) != 0)) {
+            (IsGameOverlayActive(g_settings))) {
             // Width follows the metrics actually enabled (#25) so switching some
             // off shrinks the strip instead of leaving empty space, and compact
             // mode narrows it enough to sit neatly in the taskbar area. Both the
@@ -13149,7 +13198,7 @@ DWORD WINAPI RenderThreadProc(void*) {
         // The ongoing Discord call shares a single collapsed capsule with
         // the clock or the media element. Expanded tabs retain normal width.
         if (g_settings.discord && snapshot.discord.connected &&
-            !g_settings.gameOverlay &&
+            !IsGameOverlayActive(g_settings) &&
             (primary.kind == IslandKind::Idle || primary.kind == IslandKind::Media) &&
             primary.height > 0.0f &&
             primary.height < 66.0f * g_settings.sizeScale &&

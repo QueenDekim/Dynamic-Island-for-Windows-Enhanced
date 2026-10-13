@@ -19,6 +19,7 @@ LOCAL_HEADERS = {
     "../integrations/browser-media/windhawk/browser_media_bridge.h",
     "../integrations/discord/windhawk/discord_bridge.h",
     "discord_process_loopback.h",
+    "game_detection.h",
 }
 INCLUDE = re.compile(r'(?m)^#include "([^"]+)"[ \t]*\r?$')
 dependencies: list[Path] = []

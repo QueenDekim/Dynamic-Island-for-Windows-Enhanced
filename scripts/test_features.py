@@ -41,4 +41,25 @@ check('publish_notification(evt.get("data", {}), ASSETS)' in agent,
       "Discord agent downloads sender avatar for notifications")
 check("DIDiscordIsolatedAudioLevel(activeCall)" in bridge,
       "Discord continues using isolated process audio")
+detector = (root / "src/game_detection.h").read_text(encoding="utf-8")
+bundle_script = (root / "scripts/build.py").read_text(encoding="utf-8")
+check("AutoGameOverlay: false" in source and
+      'Wh_GetIntSetting(L"Modules.AutoGameOverlay")' in source,
+      "opt-in Auto Game Mode Windhawk setting")
+check("g_autoGameOverlayActive.exchange(" in source and
+      "DIIsForegroundGame(hwnd, IsForegroundFullscreen(hwnd))" in source,
+      "foreground game detection runs on the overlay thread")
+check("kinds.assign(1, IslandKind::Idle)" in source and
+      "if (IsGameOverlayActive(g_settings))" in source,
+      "game overlay overrides media without changing manual settings")
+check("!IsGameOverlayActive(g_settings)" in source and
+      "g_settings.autoHideFullscreen" in source,
+      "full-screen game overlay is not suppressed")
+check("g_settings.autoGameOverlay ? 1000 : INFINITE" in source,
+      "auto-park wakes to detect games without busy polling")
+check("DIWindowsRecordedGamePath" in detector and
+      "DIKnownGameModule" in detector and "DIKnownGameLocation" in detector,
+      "game detection covers Windows registry, engine modules and storefronts")
+check("game_detection.h" in bundle_script,
+      "standalone Windhawk bundle includes the game detector")
 print("FEATURE_INVARIANTS_OK")
