@@ -1,6 +1,6 @@
 // ==WindhawkMod==
-// @id              dynamic-island-for-windows-fork
-// @name            Dynamic Island for Windows - Fork
+// @id              dynamic-island-for-windows-enhanced
+// @name            Dynamic Island for Windows Enhanced
 // @description     A living, breathing pill overlay inspired by iPhone's Dynamic Island. Reacts to media, downloads, clipboard, battery, and more.
 // @version         1.3.2
 // @author          Himanshu
