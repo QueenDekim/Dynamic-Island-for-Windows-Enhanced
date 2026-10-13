@@ -18,6 +18,21 @@ jobs:
           python-version: '3.12'
       - name: Bundle source
         run: python scripts/build.py
+      - name: Check integrated behavior
+        run: python scripts/test_features.py
+      - name: Test Discord notification avatars and voice state
+        shell: pwsh
+        run: |
+          python integrations/discord/agent/test_notification_avatar.py
+          python integrations/discord/agent/test_voice_state.py
+          python integrations/discord/agent/test_controller.py
+      - name: Test browser artwork and Native Messaging
+        shell: pwsh
+        run: |
+          node integrations/browser-media/tests/test_artwork.js
+          node integrations/browser-media/extension/test_background_art.cjs
+          node integrations/browser-media/extension/test_page_art.cjs
+          python integrations/browser-media/windhawk/test_native_host.py
       - name: Verify generated bundle
         shell: pwsh
         run: |

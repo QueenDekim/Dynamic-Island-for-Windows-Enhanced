@@ -1109,6 +1109,7 @@ struct DiscordSnapshot {
     int64_t joinedUnix = 0;
     std::wstring guildName;
     std::wstring channelName;
+    std::wstring channelId;
     BitmapPixels icon;
     std::vector<DiscordMember> members;
     std::array<float, 32> waveform{};
@@ -1340,6 +1341,11 @@ HANDLE g_notificationThread = nullptr;
 HANDLE g_bluetoothThread = nullptr;
 std::atomic<bool> g_running = false;
 std::atomic<int> g_idleTab = 0;
+// These atomics are updated by the Discord reader thread. They are also the
+// single source of truth for visible tabs, tab indexes and mouse hit testing.
+std::atomic<bool> g_discordProcessRunning{false};
+std::atomic<bool> g_discordVoiceActive{false};
+std::atomic<double> g_discordAutoExpandUntil{0.0};
 std::atomic<bool> g_layoutDirty = true;
 std::atomic<bool> g_clickExpanded = false;
 std::atomic<int> g_pressedMediaButton = -1;
@@ -1409,7 +1415,8 @@ int ActiveTabCount(const Settings& settings) {
     if (settings.weather) ++count;
     if (settings.hardwareMonitorModule) ++count;
     if (settings.fileTrayModule) ++count;
-    if (settings.discord) ++count;
+    if (settings.discord && g_discordProcessRunning.load(std::memory_order_relaxed))
+        ++count;
     return count;
 }
 
@@ -1419,7 +1426,8 @@ int NormalizedTabIndex(const Settings& settings) {
     return ((raw % total) + total) % total;
 }
 
-// Tab order is always: primary, calendar, weather?, hardware?, file tray?
+// Tab order: primary, Discord when in a call, calendar, weather?,
+// hardware?, file tray?, Discord when running without a call.
 // The expensive GPU / network counters are only sampled while the hardware card
 // is actually on screen, so that check needs the card's real index rather than
 // assuming it is the last tab -- which stopped being true once the File Tray
@@ -1428,18 +1436,24 @@ int HardwareMonitorTabIndex(const Settings& settings) {
     if (!settings.hardwareMonitorModule) {
         return -1;
     }
-    return 2 + (settings.weather ? 1 : 0);
+    return 2 + (settings.weather ? 1 : 0) +
+           (settings.discord && g_discordProcessRunning.load(std::memory_order_relaxed)
+            && g_discordVoiceActive.load(std::memory_order_relaxed) ? 1 : 0);
 }
 
 int FileTrayTabIndex(const Settings& settings) {
     if (!settings.fileTrayModule) {
         return -1;
     }
-    return 2 + (settings.weather ? 1 : 0) + (settings.hardwareMonitorModule ? 1 : 0);
+    return 2 + (settings.weather ? 1 : 0) + (settings.hardwareMonitorModule ? 1 : 0) +
+           (settings.discord && g_discordProcessRunning.load(std::memory_order_relaxed)
+            && g_discordVoiceActive.load(std::memory_order_relaxed) ? 1 : 0);
 }
 
 int DiscordTabIndex(const Settings& settings) {
-    if (!settings.discord) return -1;
+    if (!settings.discord || !g_discordProcessRunning.load(std::memory_order_relaxed))
+        return -1;
+    if (g_discordVoiceActive.load(std::memory_order_relaxed)) return 1;
     return 2 + (settings.weather ? 1 : 0) +
            (settings.hardwareMonitorModule ? 1 : 0) +
            (settings.fileTrayModule ? 1 : 0);
@@ -9570,12 +9584,16 @@ class Renderer {
 
             // Expanded Mode. Order must match ActiveTabCount()/FileTrayTabIndex().
             std::vector<int> activeTabs;
-            activeTabs.push_back(3); // Time (shown first when the island expands/on hover)
+            activeTabs.push_back(3); // Time
+            const bool showDiscord = DiscordTabIndex(settings) >= 0;
+            const bool voiceTabSecond = showDiscord &&
+                g_discordVoiceActive.load(std::memory_order_relaxed);
+            if (voiceTabSecond) activeTabs.push_back(5);
             activeTabs.push_back(0); // Calendar
             if (settings.weather) activeTabs.push_back(1);
             if (settings.hardwareMonitorModule) activeTabs.push_back(2);
             if (settings.fileTrayModule) activeTabs.push_back(4);
-            if (settings.discord) activeTabs.push_back(5);
+            if (showDiscord && !voiceTabSecond) activeTabs.push_back(5);
 
             int maxTabs = static_cast<int>(activeTabs.size());
             int tabIdx = NormalizedTabIndex(settings);
@@ -10116,11 +10134,15 @@ class Renderer {
             // Order must match ActiveTabCount()/FileTrayTabIndex().
             std::vector<int> activeTabs;
             activeTabs.push_back(0); // Media
+            const bool showDiscord = DiscordTabIndex(settings) >= 0;
+            const bool voiceTabSecond = showDiscord &&
+                g_discordVoiceActive.load(std::memory_order_relaxed);
+            if (voiceTabSecond) activeTabs.push_back(5);
             activeTabs.push_back(1); // Calendar
             if (settings.weather) activeTabs.push_back(2);
             if (settings.hardwareMonitorModule) activeTabs.push_back(3);
             if (settings.fileTrayModule) activeTabs.push_back(4);
-            if (settings.discord) activeTabs.push_back(5);
+            if (showDiscord && !voiceTabSecond) activeTabs.push_back(5);
 
             // Same settings object as the list above, so the index can't be
             // normalised against a tab set that no longer matches.
@@ -10347,6 +10369,46 @@ class Renderer {
 
             D2D1_RECT_F waveRect = D2D1::RectF(rect.right - 42.0f - shiftX, cy - 10.0f,
                                                rect.right - 14.0f - shiftX, cy + 10.0f);
+
+            // Collapsed playback time: elapsed / total, updated from GSMTC or
+            // browser Native Messaging ticks exactly like the scrubber.
+            const double totalSeconds = std::max(0.0, state.media.endTicks / 10000000.0);
+            double elapsedSeconds = std::max(0.0, state.media.positionTicks / 10000000.0);
+            if (state.media.playing && state.media.lastUpdatedTicks > 0) {
+                const ULONGLONG tickNow = GetTickCount64();
+                if (tickNow >= static_cast<ULONGLONG>(state.media.lastUpdatedTicks))
+                    elapsedSeconds += (tickNow - state.media.lastUpdatedTicks) / 1000.0;
+            }
+            elapsedSeconds = std::clamp(elapsedSeconds, 0.0, totalSeconds);
+            const auto formatCompactTime = [](double seconds) -> std::wstring {
+                const int64_t value = std::max(int64_t{0}, static_cast<int64_t>(seconds));
+                wchar_t buffer[32]{};
+                if (value >= 3600)
+                    swprintf_s(buffer, L"%lld:%02lld:%02lld",
+                        static_cast<long long>(value / 3600),
+                        static_cast<long long>((value / 60) % 60),
+                        static_cast<long long>(value % 60));
+                else
+                    swprintf_s(buffer, L"%lld:%02lld",
+                        static_cast<long long>(value / 60),
+                        static_cast<long long>(value % 60));
+                return buffer;
+            };
+            const std::wstring positionText =
+                formatCompactTime(elapsedSeconds) + L"/" + formatCompactTime(totalSeconds);
+            const D2D1_RECT_F positionRect = D2D1::RectF(
+                artRect.right + 5.0f, cy - 13.0f, waveRect.left - 3.0f, cy + 13.0f);
+            if (smallTextFormat_ && positionRect.right > positionRect.left) {
+                smallTextFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                smallTextFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                mutedBrush_->SetOpacity(0.92f);
+                target_->DrawTextW(positionText.c_str(),
+                    static_cast<UINT32>(positionText.size()),
+                    smallTextFormat_.Get(), positionRect, mutedBrush_.Get(),
+                    D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                smallTextFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+                smallTextFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+            }
             if (state.media.playing) {
                 DrawWaveform(state, waveRect);
             } else {
@@ -11610,7 +11672,8 @@ Activity ActivityForKind(IslandKind kind, const Settings& settings, const Shared
             activity.height = 44.0f;
             break;
         case IslandKind::Media:
-            activity.width = 150.0f;
+            // Room for artwork, elapsed/total time and the waveform.
+            activity.width = 218.0f;
             activity.height = 44.0f;
             break;
         case IslandKind::Progress:
@@ -12925,6 +12988,15 @@ DWORD WINAPI RenderThreadProc(void*) {
         // *title* change is transient now, so the pill behaves like the clipboard
         // and battery alerts -- it surfaces, then hides again while playback
         // continues in the background.
+        const bool recentDiscordChange =
+            g_settings.discord && snapshot.discord.connected &&
+            g_discordProcessRunning.load(std::memory_order_relaxed) &&
+            now < g_discordAutoExpandUntil.load(std::memory_order_relaxed);
+        if (recentDiscordChange) {
+            // The collapsed renderer resets the tab index to zero during the
+            // opening spring animation; reassert it until the popup expires.
+            g_idleTab = DiscordTabIndex(g_settings);
+        }
         const bool recentTrackChange = g_settings.mediaAutoExpand &&
                                        !MediaExpandBlocked(snapshot.media) &&
                                        primary.kind == IslandKind::Media &&
@@ -12942,7 +13014,7 @@ DWORD WINAPI RenderThreadProc(void*) {
                                  primary.kind == IslandKind::DoNotDisturb ||
                                  (g_settings.discord && snapshot.discord.connected &&
                                   (primary.kind == IslandKind::Idle || primary.kind == IslandKind::Media)) ||
-                                 recentTrackChange);
+                                 recentTrackChange || recentDiscordChange);
 
         const bool unhideGraceActive = (now < g_hotkeyUnhideUntil.load());
         const bool hoverUnhides = g_settings.unhideOnHover && hover;
@@ -13035,7 +13107,7 @@ DWORD WINAPI RenderThreadProc(void*) {
         }
 
         if (primary.kind == IslandKind::Idle) {
-            if (!isFullscreen && (pinned || isHoverExpanded)) {
+            if (!isFullscreen && (pinned || isHoverExpanded || recentDiscordChange)) {
                 primary.width = MediaLayout::kExpandedWidth * g_settings.sizeScale;
                 primary.height = MediaLayout::kExpandedHeight * g_settings.sizeScale;
             } else if (primary.width > 0.0f) {
@@ -13067,7 +13139,8 @@ DWORD WINAPI RenderThreadProc(void*) {
             primary.height = GameOverlayLayout::For(compact).height * g_settings.sizeScale;
         }
         if (primary.kind == IslandKind::Media) {
-            if (!isFullscreen && (isHoverExpanded || pinned || recentTrackChange)) {
+            if (!isFullscreen && (isHoverExpanded || pinned || recentTrackChange ||
+                                   recentDiscordChange)) {
                 primary.width = MediaLayout::kExpandedWidth * g_settings.sizeScale;
                 primary.height = MediaLayout::kExpandedHeight * g_settings.sizeScale;
             }
