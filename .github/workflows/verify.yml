@@ -22,6 +22,8 @@ jobs:
         run: python scripts/test_mod_metadata.py
       - name: Check integrated behavior
         run: python scripts/test_features.py
+      - name: Check browser process audio isolation
+        run: python scripts/test_browser_process_audio.py
       - name: Validate browser media timer interpolation
         run: python scripts/test_media_timeline.py
       - name: Check Discord PCM visualizer and timer source

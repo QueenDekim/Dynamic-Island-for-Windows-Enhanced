@@ -1084,6 +1084,7 @@ struct MediaSnapshot {
     bool playing = false;
     bool browserAudioFallback = false; // No controllable GSMTC session for this source
     bool browserBridge = false; // Native Messaging media metadata from browser extension
+    bool browserMediaMuted = false; // Selected media has no audible track
     std::wstring title;
     std::wstring artist;
     std::wstring albumTitle;
@@ -5310,23 +5311,29 @@ void PushWaveformSample(float amplitude) {
 // captured. Unlike endpoint loopback, this cannot read Discord/other apps.
 // Limitation: all tabs of the SAME browser process tree may be mixed. The
 // browser extension still decides which tab owns the displayed metadata.
+struct DIBrowserAudioWindowSearch {
+    const std::wstring* source;
+    DWORD pid = 0;
+};
+
+// EnumWindows expects WNDENUMPROC (__stdcall on 32-bit Windows).
+// A plain C++ lambda uses the default calling convention under MinGW Clang.
+BOOL CALLBACK DIBrowserAudioWindowEnumProc(HWND window, LPARAM arg) {
+    auto* search = reinterpret_cast<DIBrowserAudioWindowSearch*>(arg);
+    if (search->pid || !WindowLooksLikeMediaSource(
+            window, ToLowerCopy(*search->source)))
+        return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(window, &pid);
+    search->pid = pid;
+    return TRUE;
+}
+
 DWORD DIBrowserAudioProcessForSource(const std::wstring& mediaSource) {
     if (!IsBrowserMediaSource(mediaSource) && mediaSource != L"browser.exe")
         return 0;
-    struct Search {
-        const std::wstring* source;
-        DWORD pid = 0;
-    } search{&mediaSource};
-    EnumWindows([](HWND window, LPARAM arg) -> BOOL {
-        auto* search = reinterpret_cast<Search*>(arg);
-        if (search->pid || !WindowLooksLikeMediaSource(
-                window, ToLowerCopy(*search->source)))
-            return TRUE;
-        DWORD pid = 0;
-        GetWindowThreadProcessId(window, &pid);
-        search->pid = pid;
-        return TRUE;
-    }, reinterpret_cast<LPARAM>(&search));
+    DIBrowserAudioWindowSearch search{&mediaSource};
+    EnumWindows(DIBrowserAudioWindowEnumProc, reinterpret_cast<LPARAM>(&search));
     if (!search.pid) return 0;
 
     // A Chromium main-window PID may belong to a child process. Walk only
@@ -5386,6 +5393,14 @@ DWORD WINAPI BrowserAudioThreadProc(void*) {
         const DWORD now = GetTickCount();
         if (source != lastSource || !nextResolve ||
             static_cast<int32_t>(now - nextResolve) >= 0) {
+            if (source != lastSource) {
+                // A new tab/player may share the same browser process. Drop
+                // samples belonging to the previous media session before
+                // reading audio for the new source.
+                std::lock_guard lock(g_stateMutex);
+                g_state.waveform.fill(0.0f);
+                g_state.waveformWrite = 0;
+            }
             lastSource = source;
             nextResolve = now + 1000;
             const DWORD pid = DIBrowserAudioProcessForSource(source);
@@ -11040,8 +11055,9 @@ class Renderer {
     }
 
     void DrawWaveform(const SharedState& state, D2D1_RECT_F rect) {
-        // Media's legacy loopback contains all output devices. Never paint
-        // stale or unrelated system samples for browser-owned video/audio.
+        // Never render audio captured from other tabs for a media element
+        // explicitly reported muted or without an audio track.
+        if (state.media.browserMediaMuted) return;
         const float gap = 2.5f;
         const float minBarWidth = 2.0f;
         const float availableW = rect.right - rect.left;
@@ -13468,11 +13484,17 @@ DWORD WINAPI RenderThreadProc(void*) {
         g_audioCaptureNeeded.store(
             mediaWaveformVisible && mediaHasAttributableAudio,
             std::memory_order_relaxed);
+        // A real Browser Bridge media session sets browserAudioFallback to
+        // prevent controlling an unrelated GSMTC session. That flag must NOT
+        // disable process-isolated browser audio capture: it does not refer to
+        // the waveform or to system loopback.
+        const bool browserMediaForIsolatedCapture =
+            snapshot.media.browserBridge ||
+            (!snapshot.media.browserAudioFallback &&
+             IsBrowserMediaSource(snapshot.media.sourceAppUserModelId));
         g_browserAudioCaptureNeeded.store(
             mediaWaveformVisible && snapshot.media.available &&
-            !snapshot.media.browserAudioFallback &&
-            (snapshot.media.browserBridge ||
-             IsBrowserMediaSource(snapshot.media.sourceAppUserModelId)),
+            browserMediaForIsolatedCapture && !snapshot.media.browserMediaMuted,
             std::memory_order_relaxed);
 
         float targetWidth = primary.width;
