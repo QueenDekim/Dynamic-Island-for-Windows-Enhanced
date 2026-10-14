@@ -10935,6 +10935,12 @@ class Renderer {
     }
 
     void DrawWaveform(const SharedState& state, D2D1_RECT_F rect) {
+        // Media's legacy loopback contains all output devices. Never paint
+        // stale or unrelated system samples for browser-owned video/audio.
+        if (state.media.browserBridge || state.media.browserAudioFallback ||
+            IsBrowserMediaSource(state.media.sourceAppUserModelId)) {
+            return;
+        }
         const float gap = 2.5f;
         const float minBarWidth = 2.0f;
         const float availableW = rect.right - rect.left;
@@ -13349,7 +13355,18 @@ DWORD WINAPI RenderThreadProc(void*) {
             g_settings.media && snapshot.media.playing &&
             ((primary.kind == IslandKind::Media && primary.width > 1.0f && primary.height > 1.0f) ||
              (secondary && secondary->kind == IslandKind::Media && secondary->width > 1.0f && secondary->height > 1.0f));
-        g_audioCaptureNeeded.store(mediaWaveformVisible, std::memory_order_relaxed);
+        // The legacy Media meter captures the ENTIRE Windows render endpoint.
+        // A browser video (including a silent background) must never borrow
+        // unrelated system audio, such as a Discord call, as its waveform.
+        // Until browser process-loopback is implemented, do not run this
+        // system-wide capture for ANY browser-owned media session.
+        const bool mediaHasAttributableAudio =
+            !snapshot.media.browserBridge &&
+            !snapshot.media.browserAudioFallback &&
+            !IsBrowserMediaSource(snapshot.media.sourceAppUserModelId);
+        g_audioCaptureNeeded.store(
+            mediaWaveformVisible && mediaHasAttributableAudio,
+            std::memory_order_relaxed);
 
         float targetWidth = primary.width;
         float targetHeight = primary.height;
