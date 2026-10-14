@@ -4095,14 +4095,20 @@ MediaSnapshot MakeBrowserAudioSnapshot(const std::wstring& exePath, bool audible
 // one so paused/idle state still shows.
 winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSession SelectActiveMediaSession(
     winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager const& manager,
-    bool preferBrowser) {
+    bool preferBrowser, bool suppressYandex = false) {
     using Session = winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSession;
     using PlaybackStatus =
         winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus;
 
-    auto isPlaying = [](Session const& session) -> bool {
+    auto isPlaying = [suppressYandex](Session const& session) -> bool {
         if (!session) return false;
         try {
+            if (suppressYandex) {
+                const std::wstring source = session.SourceAppUserModelId().c_str();
+                if (IsYandexBrowserProcessPath(source) ||
+                    ToLowerCopy(source).find(L"yandex") != std::wstring::npos)
+                    return false;
+            }
             return session.GetPlaybackInfo().PlaybackStatus() == PlaybackStatus::Playing;
         } catch (...) {
             return false;
@@ -4139,6 +4145,14 @@ winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSession Select
             if (isPlaying(candidate)) return candidate;
         }
     } catch (...) {}
+    if (suppressYandex && current) {
+        try {
+            const std::wstring source = current.SourceAppUserModelId().c_str();
+            if (IsYandexBrowserProcessPath(source) ||
+                ToLowerCopy(source).find(L"yandex") != std::wstring::npos)
+                return nullptr;
+        } catch (...) { return nullptr; }
+    }
     return current;
 }
 
@@ -4173,7 +4187,8 @@ DWORD WINAPI MediaThreadProc(void*) {
             }
 
             if (manager) {
-                auto session = SelectActiveMediaSession(manager, preferBrowser);
+                auto session = SelectActiveMediaSession(
+                    manager, preferBrowser, DIBBridgeHasRecentClear());
                 if (session) {
                     auto properties = session.TryGetMediaPropertiesAsync().get();
                     auto playback = session.GetPlaybackInfo();
@@ -4358,7 +4373,7 @@ DWORD WINAPI MediaThreadProc(void*) {
             }
         }
 
-        if (browserFallbackEnabled &&
+        if (browserFallbackEnabled && !DIBBridgeHasRecentClear() &&
             (!next.available ||
              (preferBrowser && !IsBrowserMediaSource(next.sourceAppUserModelId)) ||
              (IsBrowserMediaSource(next.sourceAppUserModelId) &&
@@ -4390,7 +4405,10 @@ DWORD WINAPI MediaThreadProc(void*) {
                 bool keepPausedBrowser = false;
                 {
                     std::lock_guard lock(g_stateMutex);
-                    keepPausedBrowser = g_state.media.browserBridge && !next.playing;
+                    // Preserve the authoritative paused tab even if YouTube
+                    // hover previews create a separate *playing* GSMTC session.
+                    keepPausedBrowser = g_state.media.browserBridge &&
+                                        !browserBridgeSnapshot.playing;
                 }
                 if (browserBridgeSnapshot.playing || keepPausedBrowser) {
                     next = std::move(browserBridgeSnapshot);
