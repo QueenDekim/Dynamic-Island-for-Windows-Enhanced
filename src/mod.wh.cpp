@@ -10134,7 +10134,7 @@ class Renderer {
             const float level = (!voice.deafened && voice.waveformWrite)
                 ? Clamp(voice.waveform[static_cast<size_t>(i)], 0.0f, 1.0f)
                 : 0.0f;
-            const float height = 3.0f + level * 15.0f;
+            const float height = 3.0f + level * (15.0f * 0.80f);
             const float x = rect.right - 53.0f + static_cast<float>(i) * 4.7f;
             const D2D1_RECT_F bar = D2D1::RectF(
                 x, mid - height * 0.5f, x + 2.3f, mid + height * 0.5f);
