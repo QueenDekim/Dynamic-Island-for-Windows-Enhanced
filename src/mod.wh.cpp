@@ -1116,6 +1116,7 @@ struct DiscordSnapshot {
     bool deafened = false;
     int memberCount = 0;
     int64_t joinedUnix = 0;
+    int64_t voiceStartedUnix = 0; // Discord server channel session time if available
     std::wstring guildName;
     std::wstring channelName;
     std::wstring channelId;
@@ -10100,7 +10101,8 @@ class Renderer {
         const auto unixSeconds = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         const int64_t duration = std::clamp(
-            static_cast<int64_t>(unixSeconds) - voice.joinedUnix,
+            static_cast<int64_t>(unixSeconds) -
+                 (voice.voiceStartedUnix > 0 ? voice.voiceStartedUnix : voice.joinedUnix),
             int64_t{0}, int64_t{9999999});
         wchar_t timeText[24]{};
         if (duration >= 3600) {
@@ -10125,25 +10127,20 @@ class Renderer {
             ? D2D1::ColorF(0xE45465) : D2D1::ColorF(0x3FCD8A), &mic);
         if (mic) target_->FillEllipse(dot, mic.Get());
 
-        // All bars respond to the CURRENT Discord audio envelope simultaneously.
-        // No left-to-right history sweep. Styling follows the media waveform:
-        // rounded accent bars, common attack/release, natural spatial variation.
-        const size_t samples = voice.waveform.size();
-        const float envelope = (!voice.deafened && voice.waveformWrite)
-            ? Clamp(voice.waveform[(voice.waveformWrite - 1) % samples], 0.0f, 1.0f)
-            : 0.0f;
-        const float phase = static_cast<float>(NowSeconds() * 7.5);
+        // Each column is the independently sampled RMS of real Discord
+        // process-loopback PCM (not a sine-wave animation).
         constexpr int kBarCount = 8;
         for (int i = 0; i < kBarCount; ++i) {
-            const float pattern = 0.66f +
-                0.34f * std::abs(std::sin(phase + static_cast<float>(i) * 1.63f));
-            const float height = 3.0f + envelope * pattern * 15.0f;
+            const float level = (!voice.deafened && voice.waveformWrite)
+                ? Clamp(voice.waveform[static_cast<size_t>(i)], 0.0f, 1.0f)
+                : 0.0f;
+            const float height = 3.0f + level * 15.0f;
             const float x = rect.right - 53.0f + static_cast<float>(i) * 4.7f;
             const D2D1_RECT_F bar = D2D1::RectF(
-                x, mid - height*0.5f, x+2.3f, mid + height*0.5f);
-            accentBrush_->SetOpacity(0.45f + 0.50f * envelope);
+                x, mid - height * 0.5f, x + 2.3f, mid + height * 0.5f);
+            accentBrush_->SetOpacity(0.45f + 0.50f * level);
             target_->FillRoundedRectangle(
-                D2D1::RoundedRect(bar,1.15f,1.15f), accentBrush_.Get());
+                D2D1::RoundedRect(bar, 1.15f, 1.15f), accentBrush_.Get());
         }
         accentBrush_->SetOpacity(1.0f);
     }
@@ -10203,7 +10200,8 @@ class Renderer {
 
         const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
-        const auto duration = std::clamp(int64_t(nowSeconds)-voice.joinedUnix,
+        const auto duration = std::clamp(int64_t(nowSeconds)-
+            (voice.voiceStartedUnix > 0 ? voice.voiceStartedUnix : voice.joinedUnix),
                                          int64_t{0},int64_t{9999999});
         wchar_t clock[32]{};
         swprintf_s(clock, ARRAYSIZE(clock), L"%02lld:%02lld:%02lld",

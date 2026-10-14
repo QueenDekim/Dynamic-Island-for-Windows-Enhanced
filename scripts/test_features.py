@@ -39,7 +39,7 @@ check("output->icon = DIDiscordReadImage(DIBBridgeUtf8(lines[5]));" in bridge,
       "Discord notification uses sender avatar asset")
 check('publish_notification(evt.get("data", {}), ASSETS)' in agent,
       "Discord agent downloads sender avatar for notifications")
-check("DIDiscordIsolatedAudioLevel(activeCall)" in bridge,
+check("DIDiscordIsolatedAudioLevels(activeCall)" in bridge,
       "Discord continues using isolated process audio")
 detector = (root / "src/game_detection.h").read_text(encoding="utf-8")
 bundle_script = (root / "scripts/build.py").read_text(encoding="utf-8")

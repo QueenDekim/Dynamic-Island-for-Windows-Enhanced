@@ -24,11 +24,14 @@ jobs:
         run: python scripts/test_features.py
       - name: Validate browser media timer interpolation
         run: python scripts/test_media_timeline.py
+      - name: Check Discord PCM visualizer and timer source
+        run: python scripts/test_discord_audio_time.py
       - name: Test Discord notification avatars and voice state
         shell: pwsh
         run: |
           python integrations/discord/agent/test_notification_avatar.py
           python integrations/discord/agent/test_voice_state.py
+          python integrations/discord/agent/test_voice_session_time.py
           python integrations/discord/agent/test_controller.py
       - name: Test browser artwork and Native Messaging
         shell: pwsh

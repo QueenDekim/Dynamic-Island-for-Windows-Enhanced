@@ -61,7 +61,7 @@ def main() -> int:
     built = inline_headers(SOURCE)
     if not built.startswith("// ==WindhawkMod=="):
         raise RuntimeError("Windhawk metadata was lost")
-    if built.count("float DIDiscordIsolatedAudioLevel(bool inCall)") != 1:
+    if built.count("std::array<float, 8> DIDiscordIsolatedAudioLevels(bool inCall)") != 1:
         raise RuntimeError("Discord process-isolated audio integration is missing")
     if "C:/Projects/DynamicIsland" in built:
         raise RuntimeError("Bundled source contains a developer-specific include")
