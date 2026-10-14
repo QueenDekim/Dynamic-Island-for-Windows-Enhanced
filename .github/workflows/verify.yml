@@ -22,6 +22,8 @@ jobs:
         run: python scripts/test_mod_metadata.py
       - name: Check integrated behavior
         run: python scripts/test_features.py
+      - name: Validate browser media timer interpolation
+        run: python scripts/test_media_timeline.py
       - name: Test Discord notification avatars and voice state
         shell: pwsh
         run: |

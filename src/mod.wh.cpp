@@ -4430,6 +4430,41 @@ DWORD WINAPI MediaThreadProc(void*) {
                 g_idleTab = 0;
             }
 
+            // Browser positions arrive asynchronously. Do not reset the timer
+            // to a delayed media sample every 1.5 seconds: the renderer has
+            // already advanced its monotonic timeline since the last poll.
+            // Accept genuine seeks immediately, but keep normal playback
+            // monotonic when samples differ only by transport latency.
+            if (next.browserBridge && g_state.media.browserBridge &&
+                next.playing && g_state.media.playing &&
+                next.title == g_state.media.title &&
+                next.artist == g_state.media.artist &&
+                next.sourceAppUserModelId == g_state.media.sourceAppUserModelId &&
+                next.endTicks == g_state.media.endTicks &&
+                g_state.media.lastUpdatedTicks > 0) {
+                const ULONGLONG tickNow = GetTickCount64();
+                const ULONGLONG previousTick =
+                    static_cast<ULONGLONG>(g_state.media.lastUpdatedTicks);
+                if (tickNow >= previousTick && tickNow - previousTick < 30000) {
+                    const int64_t predicted = g_state.media.positionTicks +
+                        static_cast<int64_t>(tickNow - previousTick) * 10000;
+                    const int64_t error = next.positionTicks - predicted;
+                    constexpr int64_t kSampleJitterTicks = 20000000; // 2s
+                    if (error >= -kSampleJitterTicks &&
+                        error <= kSampleJitterTicks) {
+                        // Ignore late backward samples. Positive corrections
+                        // are capped to avoid a visible jump in seconds.
+                        next.positionTicks = predicted +
+                            std::clamp(error, int64_t{0}, int64_t{750000});
+                        if (next.endTicks > 0) {
+                            next.positionTicks = std::min(next.positionTicks,
+                                                          next.endTicks);
+                        }
+                    }
+                    // Larger discontinuities are actual user seeks or media
+                    // restarts and must not be hidden by the jitter filter.
+                }
+            }
             if (!next.browserAudioFallback && !g_state.media.browserAudioFallback &&
                 !g_state.media.art.bgra.empty() &&
                 next.sourceAppUserModelId == g_state.media.sourceAppUserModelId &&
