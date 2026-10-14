@@ -1346,6 +1346,7 @@ HANDLE g_renderThread = nullptr;
 HANDLE g_mediaThread = nullptr;
 HANDLE g_discordThread = nullptr;
 HANDLE g_audioThread = nullptr;
+HANDLE g_browserAudioThread = nullptr;
 HANDLE g_weatherThread = nullptr;
 HANDLE g_notificationThread = nullptr;
 HANDLE g_bluetoothThread = nullptr;
@@ -1366,7 +1367,8 @@ std::atomic<int> g_hoveredFileTrayRow = -1;  // row index under the cursor on th
 std::atomic<bool> g_scrubbing = false;           // true while press-dragging the media timeline scrubber
 std::atomic<float> g_scrubDragFraction = 0.0f;   // live 0..1 drag position while g_scrubbing is true
 std::atomic<double> g_lastLiveSeekTime = 0.0;    // throttle gate for live seeks while dragging
-std::atomic<bool> g_audioCaptureNeeded = false;  // gates the WASAPI loopback thread
+std::atomic<bool> g_audioCaptureNeeded = false;  // gates system loopback for non-browser media
+std::atomic<bool> g_browserAudioCaptureNeeded{false};  // process-isolated browser meter
 std::atomic<bool> g_manuallyHidden = false;      // user-toggled hide, via menu or hotkey
 UINT g_registeredHotkeyModifiers = 0;            // modifiers currently registered with the OS
 UINT g_registeredHotkeyVk = 0;                   // vk currently registered with the OS
@@ -5302,6 +5304,109 @@ void PushWaveformSample(float amplitude) {
 
     g_state.waveform[g_state.waveformWrite % g_state.waveform.size()] = smoothed;
     ++g_state.waveformWrite;
+}
+
+// Browser process loopback: only the window-owned browser process tree is
+// captured. Unlike endpoint loopback, this cannot read Discord/other apps.
+// Limitation: all tabs of the SAME browser process tree may be mixed. The
+// browser extension still decides which tab owns the displayed metadata.
+DWORD DIBrowserAudioProcessForSource(const std::wstring& mediaSource) {
+    if (!IsBrowserMediaSource(mediaSource) && mediaSource != L"browser.exe")
+        return 0;
+    struct Search {
+        const std::wstring* source;
+        DWORD pid = 0;
+    } search{&mediaSource};
+    EnumWindows([](HWND window, LPARAM arg) -> BOOL {
+        auto* search = reinterpret_cast<Search*>(arg);
+        if (search->pid || !WindowLooksLikeMediaSource(
+                window, ToLowerCopy(*search->source)))
+            return TRUE;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(window, &pid);
+        search->pid = pid;
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&search));
+    if (!search.pid) return 0;
+
+    // A Chromium main-window PID may belong to a child process. Walk only
+    // ancestors with the same browser executable, never to an unrelated host.
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return search.pid;
+    struct Row { DWORD pid; DWORD parent; std::wstring exe; };
+    std::vector<Row> rows;
+    PROCESSENTRY32W row{};
+    row.dwSize = sizeof(row);
+    if (Process32FirstW(snapshot, &row)) {
+        do {
+            rows.push_back({row.th32ProcessID, row.th32ParentProcessID,
+                            ToLowerCopy(row.szExeFile)});
+        } while (Process32NextW(snapshot, &row));
+    }
+    CloseHandle(snapshot);
+    DWORD root = search.pid;
+    for (size_t depth = 0; depth < 12; ++depth) {
+        const Row* child = nullptr;
+        for (const Row& row : rows)
+            if (row.pid == root) { child = &row; break; }
+        if (!child) break;
+        const Row* parent = nullptr;
+        for (const Row& row : rows)
+            if (row.pid == child->parent) { parent = &row; break; }
+        if (!parent || parent->exe != child->exe || parent->pid == root) break;
+        root = parent->pid;
+    }
+    return root;
+}
+
+DWORD WINAPI BrowserAudioThreadProc(void*) {
+    const HRESULT hrCo = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    DIDiscordProcessCapture processCapture;
+    DWORD capturePid = 0;
+    DWORD nextResolve = 0;
+    std::wstring lastSource;
+    while (WaitForSingleObject(g_stopEvent, 16) == WAIT_TIMEOUT) {
+        if (!g_browserAudioCaptureNeeded.load(std::memory_order_relaxed)) {
+            processCapture.Stop();
+            capturePid = 0;
+            nextResolve = 0;
+            WaitForSingleObject(g_stopEvent, 100);
+            continue;
+        }
+        std::wstring source;
+        {
+            std::lock_guard lock(g_stateMutex);
+            source = g_state.media.sourceAppUserModelId;
+        }
+        if (!IsBrowserMediaSource(source) && source != L"browser.exe") {
+            processCapture.Stop();
+            capturePid = 0;
+            continue;
+        }
+        const DWORD now = GetTickCount();
+        if (source != lastSource || !nextResolve ||
+            static_cast<int32_t>(now - nextResolve) >= 0) {
+            lastSource = source;
+            nextResolve = now + 1000;
+            const DWORD pid = DIBrowserAudioProcessForSource(source);
+            if (pid != capturePid) {
+                processCapture.Stop();
+                capturePid = 0;
+                if (pid && processCapture.Start(pid)) capturePid = pid;
+                // Discard old media/session data at a new capture boundary.
+                for (int i = 0; i < 128; ++i) PushWaveformSample(0.0f);
+            } else if (!capturePid && pid && processCapture.Start(pid)) {
+                capturePid = pid;
+            }
+        }
+        if (!capturePid) continue;
+        const auto levels = processCapture.ReadLevels();
+        // Same audible-level scale as Media's existing RMS*4 transform.
+        for (float level : levels) PushWaveformSample(level * 0.8f);
+    }
+    processCapture.Stop();
+    if (SUCCEEDED(hrCo)) CoUninitialize();
+    return 0;
 }
 
 void PushAudioChunks(BYTE* data, UINT32 frames, WAVEFORMATEX* format) {
@@ -10151,7 +10256,7 @@ class Renderer {
             // a three-pixel floor, and rounded bars. Keep the existing
             // compact Discord slot size and 20% visual size reduction.
             const float amplitude = Clamp(level, 0.03f, 1.0f);
-            const float height = std::max(3.0f, amplitude * 15.0f * 0.86f * 0.80f);
+            const float height = std::max(3.0f, amplitude * 19.0f * 0.86f);
             const float x = rect.right - 53.0f + static_cast<float>(i) * 4.7f;
             const D2D1_RECT_F bar = D2D1::RectF(
                 x, mid - height * 0.5f, x + 2.3f, mid + height * 0.5f);
@@ -10937,10 +11042,6 @@ class Renderer {
     void DrawWaveform(const SharedState& state, D2D1_RECT_F rect) {
         // Media's legacy loopback contains all output devices. Never paint
         // stale or unrelated system samples for browser-owned video/audio.
-        if (state.media.browserBridge || state.media.browserAudioFallback ||
-            IsBrowserMediaSource(state.media.sourceAppUserModelId)) {
-            return;
-        }
         const float gap = 2.5f;
         const float minBarWidth = 2.0f;
         const float availableW = rect.right - rect.left;
@@ -13367,6 +13468,12 @@ DWORD WINAPI RenderThreadProc(void*) {
         g_audioCaptureNeeded.store(
             mediaWaveformVisible && mediaHasAttributableAudio,
             std::memory_order_relaxed);
+        g_browserAudioCaptureNeeded.store(
+            mediaWaveformVisible && snapshot.media.available &&
+            !snapshot.media.browserAudioFallback &&
+            (snapshot.media.browserBridge ||
+             IsBrowserMediaSource(snapshot.media.sourceAppUserModelId)),
+            std::memory_order_relaxed);
 
         float targetWidth = primary.width;
         float targetHeight = primary.height;
@@ -13820,6 +13927,7 @@ bool StartThreads() {
     g_mediaThread = CreateThread(nullptr, 0, MediaThreadProc, nullptr, 0, nullptr);
     g_discordThread = CreateThread(nullptr, 0, DiscordThreadProc, nullptr, 0, nullptr);
     g_audioThread = CreateThread(nullptr, 0, AudioThreadProc, nullptr, 0, nullptr);
+    g_browserAudioThread = CreateThread(nullptr, 0, BrowserAudioThreadProc, nullptr, 0, nullptr);
     g_weatherThread = CreateThread(nullptr, 0, WeatherThreadProc, nullptr, 0, nullptr);
     g_keyboardThread = CreateThread(nullptr, 0, KeyboardThreadProc, nullptr, 0, &g_keyboardThreadId);
     g_mouseThread = CreateThread(nullptr, 0, MouseThreadProc, nullptr, 0, &g_mouseThreadId);
@@ -13844,7 +13952,7 @@ void StopThreads() {
         SetEvent(g_stopEvent);
     }
 
-    HANDLE handles[] = {g_renderThread, g_mediaThread, g_discordThread, g_audioThread, g_weatherThread, g_notificationThread, g_keyboardThread, g_mouseThread, g_bluetoothThread};
+    HANDLE handles[] = {g_renderThread, g_mediaThread, g_discordThread, g_audioThread, g_browserAudioThread, g_weatherThread, g_notificationThread, g_keyboardThread, g_mouseThread, g_bluetoothThread};
     for (HANDLE handle : handles) {
         if (handle) {
             WaitForSingleObject(handle, 3000);
@@ -13856,6 +13964,7 @@ void StopThreads() {
     g_mediaThread = nullptr;
     g_discordThread = nullptr;
     g_audioThread = nullptr;
+    g_browserAudioThread = nullptr;
     g_weatherThread = nullptr;
     g_notificationThread = nullptr;
     g_keyboardThread = nullptr;
