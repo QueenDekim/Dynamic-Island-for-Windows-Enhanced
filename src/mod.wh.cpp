@@ -10127,16 +10127,12 @@ class Renderer {
             ? D2D1::ColorF(0xE45465) : D2D1::ColorF(0x3FCD8A), &mic);
         if (mic) target_->FillEllipse(dot, mic.Get());
 
-        // Same history-based waveform as the media dashboard: each bar
-        // reads a different point from the PCM amplitude ring buffer.
+        // Synchronous bars: one current per-column PCM amplitude, with
+        // independent attack/release; NO scrolling or history offsets.
         constexpr int kBarCount = 8;
-        constexpr size_t kSampleStep = 3;
         for (int i = 0; i < kBarCount; ++i) {
-            const size_t offset = static_cast<size_t>(kBarCount - i) * kSampleStep;
-            const size_t index = (voice.waveformWrite + voice.waveform.size() -
-                                  offset) % voice.waveform.size();
             const float level = (!voice.deafened && voice.waveformWrite)
-                ? Clamp(voice.waveform[index], 0.0f, 1.0f)
+                ? Clamp(voice.waveform[static_cast<size_t>(i)], 0.0f, 1.0f)
                 : 0.0f;
             const float height = 3.0f + level * 15.0f;
             const float x = rect.right - 53.0f + static_cast<float>(i) * 4.7f;
