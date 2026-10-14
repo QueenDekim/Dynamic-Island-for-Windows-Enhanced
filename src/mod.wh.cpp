@@ -4374,7 +4374,10 @@ DWORD WINAPI MediaThreadProc(void*) {
             }
         }
 
-        if (browserFallbackEnabled && !DIBBridgeHasRecentClear() &&
+        // Do not infer a browser player from Discord audio alone.
+        if (browserFallbackEnabled &&
+            !g_discordVoiceActive.load(std::memory_order_relaxed) &&
+            !DIBBridgeHasRecentClear() &&
             (!next.available ||
              (preferBrowser && !IsBrowserMediaSource(next.sourceAppUserModelId)) ||
              (IsBrowserMediaSource(next.sourceAppUserModelId) &&
@@ -4417,6 +4420,16 @@ DWORD WINAPI MediaThreadProc(void*) {
                     lastBrowserAudioAt = -100.0;
                 }
             }
+        }
+
+        // Steam Community profile backgrounds are not media selections.
+        // GSMTC may publish them despite the extension filtering the page.
+        if (IsBrowserMediaSource(next.sourceAppUserModelId) &&
+            (next.title.find(L"Сообщество Steam") != std::wstring::npos ||
+             next.title.find(L"Steam Community") != std::wstring::npos)) {
+            next = {};
+            recentBrowserAudio = {};
+            lastBrowserAudioAt = -100.0;
         }
 
         bool trackJustChanged = false;
@@ -10134,7 +10147,11 @@ class Renderer {
             const float level = (!voice.deafened && voice.waveformWrite)
                 ? Clamp(voice.waveform[static_cast<size_t>(i)], 0.0f, 1.0f)
                 : 0.0f;
-            const float height = 3.0f + level * (15.0f * 0.80f);
+            // Media DrawWaveform geometry: amplitude * 86% of the slot,
+            // a three-pixel floor, and rounded bars. Keep the existing
+            // compact Discord slot size and 20% visual size reduction.
+            const float amplitude = Clamp(level, 0.03f, 1.0f);
+            const float height = std::max(3.0f, amplitude * 15.0f * 0.86f * 0.80f);
             const float x = rect.right - 53.0f + static_cast<float>(i) * 4.7f;
             const D2D1_RECT_F bar = D2D1::RectF(
                 x, mid - height * 0.5f, x + 2.3f, mid + height * 0.5f);
